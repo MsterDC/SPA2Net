@@ -11,3 +11,5 @@
 ### [Other]
 #### To execute 'spa' or 'spa+sa' with older code:
 #### - bash ./scripts/train_spa.sh
+#### - bash ./scripts/val_spa.sh
+#### - You also need to pay attention to the parameters in the script which you want to asign.
