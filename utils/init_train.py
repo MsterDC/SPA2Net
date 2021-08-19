@@ -77,9 +77,10 @@ class opts(object):
         self.parser.add_argument("--scg_com", action='store_true', help='switch on second order supervised.')
 
         self.parser.add_argument("--sos_lr", type=float, default=0.001)
-        self.parser.add_argument("--sos_seg", type=str, default='none', help='scm / none')
-        self.parser.add_argument("--sos_fg_th", type=float, default=0.01, help='for generating gt scm')
-        self.parser.add_argument("--sos_bg_th", type=float, default=0.01, help='for generating gt scm')
+        self.parser.add_argument("--sos_gt_seg", type=str, default='True', help='True / False')
+        self.parser.add_argument("--sos_gt_method", type=str, default='BCE', help='BCE / MSE_BCE / CE2D')
+        self.parser.add_argument("--sos_fg_th", type=float, default=0.01, help='for generating pseudo gt scm')
+        self.parser.add_argument("--sos_bg_th", type=float, default=0.01, help='for generating pseudo gt scm')
         self.parser.add_argument("--sos_loss_weight", type=float, default=0.1, help='loss weight for the sos loss.')
         self.parser.add_argument("--sos_start", type=float, default=10, help='the start epoch to introduce sos.')
 
