@@ -1,6 +1,7 @@
 import cv2
 import torch
 from torch.autograd import Variable
+from distutils.version import LooseVersion
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 import torch.nn.functional as F
@@ -56,7 +57,6 @@ class VGG(nn.Module):
                 nn.Conv2d(1024, 1024, kernel_size=3, padding=1, dilation=1),
                 nn.ReLU(True),
                 nn.Conv2d(1024, 1, kernel_size=1, padding=0))
-            self.mse_loss = torch.nn.MSELoss(reduce=True, size_average=True)
 
         # if 'rcst' in self.args.mode or 'sst' in self.args.mode:
         #     self.rcst = nn.Sequential(
@@ -75,7 +75,9 @@ class VGG(nn.Module):
         self._initialize_weights()
 
         # loss function
-        self.loss_cross_entropy = F.cross_entropy
+        self.ce_loss = F.cross_entropy
+        self.mse_loss = F.mse_loss
+        self.bce_loss = F.binary_cross_entropy_with_logits
 
     def _initialize_weights(self):
         for m in self.modules():
@@ -89,6 +91,32 @@ class VGG(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
+
+    def get_masked_pseudo_gt(self, gt_scm, fg_th, bg_th, method='MSE_BCE', bg_idx=None, fg_idx=None):
+        # for BCE: convert scm to [0,1] binary mask.
+        if method == 'BCE':
+            if fg_th:
+                mask_hm_zero = torch.zeros_like(gt_scm)
+                mask_hm_one = torch.ones_like(gt_scm)
+                gt_scm = torch.where(gt_scm >= fg_th, mask_hm_one, mask_hm_zero)
+            pass
+        # for MSE_BCE: convert scm to [0,value,1] mix mask.
+        elif method == 'MSE_BCE':
+            if fg_th and bg_th:
+                mask_hm_zero = torch.zeros_like(gt_scm)
+                mask_hm_one = torch.ones_like(gt_scm)
+                gt_scm = torch.where(gt_scm >= fg_th, mask_hm_one, gt_scm)
+                gt_scm = torch.where(gt_scm <= bg_th, mask_hm_zero, gt_scm)
+            pass
+        # for CE2D: first convert scm to [bg_cls_idx, fg_cls_idx] mask and then convert to one-hot tensor.
+        elif method == 'CE2D':
+            if fg_th:
+                mask_bg = torch.full(gt_scm.size(), bg_idx)
+                mask_fg = torch.full(gt_scm.size(), fg_idx)
+                gt_scm = torch.where(gt_scm >= fg_th, mask_fg, mask_bg)
+            pass
+
+        return gt_scm
 
     def get_scm(self, logits, gt_label, sc_maps_fo, sc_maps_so):
         # get cam
@@ -117,15 +145,55 @@ class VGG(nn.Module):
         sc_map_cls_i = (sc_map_cls_i - torch.min(sc_map_cls_i)) / (
                 torch.max(sc_map_cls_i) - torch.min(sc_map_cls_i) + 1e-10)
         gt_scm = torch.where(sc_map_cls_i > 0, sc_map_cls_i, torch.zeros_like(sc_map_cls_i))
-        # using scm to segment foreground/background or not.
-        if self.args.sos_seg == 'scm':
-            if self.args.sos_fg_th and self.args.sos_bg_th:
-                mask_hm_zero = torch.zeros_like(gt_scm)
-                mask_hm_one = torch.ones_like(gt_scm)
-                gt_scm = torch.where(gt_scm >= self.args.sos_fg_th, mask_hm_one, gt_scm)
-                gt_scm = torch.where(gt_scm <= self.args.sos_bg_th, mask_hm_zero, gt_scm)
+        # segment fg/bg for scm or not.
+        if self.args.sos_gt_seg == 'True':
+            gt_scm = self.get_masked_pseudo_gt(gt_scm, self.args.sos_fg_th, self.args.sos_bg_th,
+                                               method=self.args.sos_gt_method)
         gt_scm = gt_scm.detach()
         return gt_scm
+
+    def cross_entropy2d(self, input, target, weight=None, size_average=True):
+        # input: (n, c, h, w), target: (n, h, w)
+        n, c, h, w = input.size()
+        # log_p: (n, c, h, w)
+        if LooseVersion(torch.__version__) < LooseVersion('0.3'):
+            # ==0.2.X
+            log_p = F.log_softmax(input)
+        else:
+            # >=0.3
+            log_p = F.log_softmax(input, dim=1)
+        # log_p: (n*h*w, c)
+        log_p = log_p.transpose(1, 2).transpose(2, 3).contiguous()
+        log_p = log_p[target.view(n, h, w, 1).repeat(1, 1, 1, c) >= 0]
+        log_p = log_p.view(-1, c)
+        # target: (n*h*w,)
+        mask = target >= 0
+        target = target[mask]
+        loss = F.nll_loss(log_p, target, weight=weight, reduction='mean')
+        if size_average:
+            loss /= mask.data.sum()
+        return loss
+
+    def get_sos_loss(self, pre_hm, gt_hm):
+        if self.args.sos_gt_seg == 'False' or self.args.sos_gt_method == 'MSE_BCE':
+            return self.mse_loss(pre_hm, gt_hm)
+        else:
+            if self.args.sos_gt_method == 'BCE':
+                return self.bce_loss(pre_hm, gt_hm)
+            elif self.args.sos_gt_method == 'CE2D':
+                return self.cross_entropy2d(pre_hm, gt_hm)
+
+    def get_ra_loss(self, logits, label, th_bg=0.3, bg_fg_gap=0.0):
+        n, _, _, _ = logits.size()
+        cls_logits = F.softmax(logits, dim=1)
+        var_logits = torch.var(cls_logits, dim=1)
+        norm_var_logits = self.normalize_feat(var_logits)  # (n, w, h)
+        bg_mask = (norm_var_logits < th_bg).float()
+        fg_mask = (norm_var_logits > (th_bg + bg_fg_gap)).float()
+        cls_map = logits[torch.arange(n), label.long(), ...]
+        cls_map = torch.sigmoid(cls_map)
+        ra_loss = torch.mean(cls_map * bg_mask + (1 - cls_map) * fg_mask)
+        return ra_loss
 
     def get_loss(self, logits, gt_child_label, pre_hm, gt_hm, epoch):
         if self.args.use_tap == 'True' and self.args.tap_start <= epoch:
@@ -133,15 +201,14 @@ class VGG(nn.Module):
         else:
             cls_logits = torch.mean(torch.mean(logits, dim=2), dim=2)  # (n, 200)
         loss = 0
-        loss += self.loss_cross_entropy(cls_logits, gt_child_label.long())
+        loss += self.ce_loss(cls_logits, gt_child_label.long())
         if 'sos' in self.args.mode and epoch >= self.args.sos_start:
-            # print("[TEST] sos before => loss:", loss)
-            sos_loss = self.mse_loss(pre_hm, gt_hm)
-            # print("[TEST] sos => loss:", sos_loss)
+            # print("[TEST] loss before => ", loss)
+            sos_loss = self.get_sos_loss(pre_hm, gt_hm)
+            # print("[TEST] loss sos => ", sos_loss)
             loss += self.args.sos_loss_weight * sos_loss
         else:
             sos_loss = torch.zeros_like(loss)
-
         if self.args.ram and epoch >= self.args.ram_start:
             ra_loss = self.get_ra_loss(logits, gt_child_label, self.args.ram_th_bg, self.args.ram_bg_fg_gap)
             loss += self.args.ra_loss_weight * ra_loss
@@ -160,18 +227,6 @@ class VGG(nn.Module):
 
         # return loss, ra_loss, sos_loss, rcst_loss
         return loss, ra_loss, sos_loss
-
-    def get_ra_loss(self, logits, label, th_bg=0.3, bg_fg_gap=0.0):
-        n, _, _, _ = logits.size()
-        cls_logits = F.softmax(logits, dim=1)
-        var_logits = torch.var(cls_logits, dim=1)
-        norm_var_logits = self.normalize_feat(var_logits)  # (n, w, h)
-        bg_mask = (norm_var_logits < th_bg).float()
-        fg_mask = (norm_var_logits > (th_bg + bg_fg_gap)).float()
-        cls_map = logits[torch.arange(n), label.long(), ...]
-        cls_map = torch.sigmoid(cls_map)
-        ra_loss = torch.mean(cls_map * bg_mask + (1 - cls_map) * fg_mask)
-        return ra_loss
 
     def normalize_feat(self, feat):
         n, fh, fw = feat.size()
