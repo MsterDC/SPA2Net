@@ -66,6 +66,7 @@ class opts(object):
         self.parser.add_argument("--scg_sosc_th", type=float, default=1)
         self.parser.add_argument("--scg_order", type=int, default=2, help='the order of similarity of HSC.')
         self.parser.add_argument("--scg_so_weight", type=float, default=1)
+        self.parser.add_argument("--sos_fg_th", type=float, default=0.5)
         self.parser.add_argument("--sa_use_edge", type=str, default='True', help='Add edge encoding or not')
         self.parser.add_argument("--sa_edge_stage", type=str, default='4,5', help='2 for feat2, etc.')
         self.parser.add_argument("--sa_head", type=float, default=1, help='number of SA heads')
@@ -391,6 +392,8 @@ def val(args):
 
             # SOS localization
             if 'sos' in args.mode:
+                output = F.sigmoid(pred_sos)
+                pred_sos = torch.where(output >= args.sos_fg_th, torch.ones_like(output), torch.zeros_like(output))
                 locerr_sos, wrong_detail_sos, pred_box, maps_sos = eval_loc_sos(pred_sos, img_path[0], label_in,
                                                                                 gt_boxes[idx], threshold=th,
                                                                                 iou_th=args.iou_th)
