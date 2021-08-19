@@ -207,10 +207,13 @@ def train(args):
                         watch_label = label.long()[idx]
                         if 'sos' in args.mode and current_epoch >= args.sos_start:
                             watch_gt = [gt_scm[idx]]
-                            watch_sos = [pred_sos[idx]]
                             watch_scm = [(sc_maps_fo[-2][idx], sc_maps_fo[-1][idx]),
                                          (sc_maps_so[-2][idx], sc_maps_so[-1][idx])]
-
+                            if args.sos_gt_method == 'BCE':
+                                output = F.sigmoid(pred_sos[idx])
+                                watch_sos = [torch.where(output >= args.sos_fg_th, torch.ones_like(output), torch.zeros_like(output))]
+                            else:
+                                watch_sos = [pred_sos[idx]]
                         save_flag = False
 
         # vis cam during training
