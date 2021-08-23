@@ -60,8 +60,6 @@ class opts(object):
 
         self.parser.add_argument("--in_norm", type=str, default='True', help='normalize input or not')
 
-        self.parser.add_argument("--mode", type=str, default='sos+sa', help='spa/sos/spa+sa/sos+sa')
-
         self.parser.add_argument("--sa_lr", type=float, default=0.001)
         self.parser.add_argument("--sa_use_edge", type=str, default='False', help='Add edge encoding or not')
         self.parser.add_argument("--sa_edge_stage", type=str, default='5', help='4 for feat4, etc.')
@@ -100,6 +98,10 @@ class opts(object):
         self.parser.add_argument("--tap_th", type=float, default=0.1, help='threshold avg pooling')
         self.parser.add_argument("--tap_start", type=float, default=0)
 
+        self.parser.add_argument("--hinge_lr", type=float, default=0.001)
+        self.parser.add_argument("--hinge_loss_weight", type=float, default=0.1)
+
+        self.parser.add_argument("--mode", type=str, default='sos+sa', help='spa/spa+hinge/sos/spa+sa/sos+sa/')
         self.parser.add_argument("--watch_cam", action='store_true', help='save cam each iteration')
 
     def parse(self):
@@ -117,6 +119,7 @@ def get_model(args):
     lr = args.lr
     sos_lr = args.sos_lr if ('sos' in args.mode) else None
     sa_lr = args.sa_lr if 'sa' in args.mode else None
+    hg_lr = args.hinge_lr if 'hinge' in args.mode else None
 
     cls_layer = ['cls']
     cls_weight_list = []
@@ -130,13 +133,17 @@ def get_model(args):
     sa_weight_list = []
     sa_bias_list = []
 
+    hg_layer = ['hinge'] if 'hinge' in args.mode else []
+    hg_weight_list = []
+    hg_bias_list = []
+
     other_weight_list = []
     other_bias_list = []
 
-    if 'sos' in args.mode:
-        sos_lr = args.sos_lr
-    if 'sa' in args.mode:
-        sa_lr = args.sa_lr
+    # if 'sos' in args.mode:
+    #     sos_lr = args.sos_lr
+    # if 'sa' in args.mode:
+    #     sa_lr = args.sa_lr
     # if 'rcst' in args.mode or 'sst' in args.mode:
     #     rcst_lr = args.rcst_lr
     #     fpn_layers = ['fpn', 'maxpool', 'rcst']
@@ -146,25 +153,31 @@ def get_model(args):
     print('\n Following parameters will be assigned different learning rate:')
     for name, value in model.named_parameters():
         if cls_layer[0] in name:
-            print("cls-layer learning rate:", lr*10, " => ", name)
+            print("cls-layer's learning rate:", lr*10, " => ", name)
             if 'weight' in name:
                 cls_weight_list.append(value)
             elif 'bias' in name:
                 cls_bias_list.append(value)
         elif ('sos' in args.mode) and sos_layer[0] in name:
-            print("sos-layer learning rate:", sos_lr, " => ", name)
+            print("sos-layer's learning rate:", sos_lr, " => ", name)
             if 'weight' in name:
                 sos_weight_list.append(value)
             elif 'bias' in name:
                 sos_bias_list.append(value)
         elif ('sa' in args.mode) and sa_layer[0] in name:
-            print("sa-module learning rate:", sa_lr, " => ", name)
+            print("sa-module's learning rate:", sa_lr, " => ", name)
             if 'weight' in name:
                 sa_weight_list.append(value)
             elif 'bias' in name:
                 sa_bias_list.append(value)
+        elif ('hinge' in args.mode) and hg_layer[0] in name:
+            print("hinge-layer's learning rate:", hg_lr*10, " => ", name)
+            if 'weight' in name:
+                hg_weight_list.append(value)
+            elif 'bias' in name:
+                hg_bias_list.append(value)
         else:
-            print("other layer learning rate:", lr, " => ", name)
+            print("other layer's learning rate:", lr, " => ", name)
             if 'weight' in name:
                 other_weight_list.append(value)
             elif 'bias' in name:
@@ -185,6 +198,9 @@ def get_model(args):
     if 'sa' in args.mode:
         op_params_list.append({'params': sa_weight_list, 'lr': sa_lr})
         op_params_list.append({'params': sa_bias_list, 'lr': sa_lr * 2})
+    if 'hinge' in args.mode:
+        op_params_list.append({'params': hg_weight_list, 'lr': hg_lr * 10})
+        op_params_list.append({'params': hg_bias_list, 'lr': hg_lr * 20})
     # if 'rcst' in args.mode or 'sst' in args.mode:
     #     op_params_list.append({'params': fpn_weight_list, 'lr': rcst_lr})
     #     op_params_list.append({'params': fpn_bias_list, 'lr': rcst_lr * 2})
@@ -231,18 +247,27 @@ def log_init(args):
 
     log_head = '#epoch \t loss \t pred@1 \t pred@5 \t'
 
+    losses_so = None
+    losses_hg = None
+    losses_ra = None
+
     if 'sos' in args.mode:
         losses_so = AverageMeter()
-        return_params.append(losses_so)
         log_head += 'loss_so \t '
+    if 'hinge' in args.mode:
+        losses_hg = AverageMeter()
+        log_head += 'loss_hg \t'
     # if 'rcst' in args.mode or 'sst' in args.mode:
     #     losses_rcst = AverageMeter()
     #     return_params.append(losses_rcst)
     #     log_head += 'loss_rcst \t '
     if args.ram:
         losses_ra = AverageMeter()
-        return_params.append(losses_ra)
         log_head += 'loss_ra \t '
+
+    return_params.append(losses_so)
+    return_params.append(losses_hg)
+    return_params.append(losses_ra)
 
     log_head += '\n'
     return_params.append(log_head)
