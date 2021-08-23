@@ -58,6 +58,15 @@ class VGG(nn.Module):
                 nn.ReLU(True),
                 nn.Conv2d(1024, 1, kernel_size=1, padding=0))
 
+        if 'hinge' in self.args.mode:
+            self.hinge = nn.Sequential(
+                nn.Conv2d(512, 1024, kernel_size=3, padding=1, dilation=1),
+                nn.ReLU(True),
+                nn.Conv2d(1024, 1024, kernel_size=3, padding=1, dilation=1),
+                nn.ReLU(True),
+                nn.Conv2d(1024, self.num_classes, kernel_size=1, padding=0)
+            )
+
         # if 'rcst' in self.args.mode or 'sst' in self.args.mode:
         #     self.rcst = nn.Sequential(
         #         nn.Conv2d(512, 1024, kernel_size=3, padding=1, dilation=1),
@@ -78,6 +87,7 @@ class VGG(nn.Module):
         self.ce_loss = F.cross_entropy
         self.mse_loss = F.mse_loss
         self.bce_loss = F.binary_cross_entropy_with_logits
+        self.hinge_loss = F.multi_margin_loss
 
     def _initialize_weights(self):
         for m in self.modules():
@@ -91,6 +101,118 @@ class VGG(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
+
+    def hsc(self, f_phi, fo_th=0.2, so_th=1, order=2):
+        n, c_nl, h, w = f_phi.size()
+        if h != 14 or w != 14:
+            h, w = 14, 14
+            f_phi = F.interpolate(f_phi, size=(h, w), mode='bilinear', align_corners=True)
+        f_phi = f_phi.permute(0, 2, 3, 1).contiguous().view(n, -1, c_nl)
+        f_phi_normed = f_phi / (torch.norm(f_phi, dim=2, keepdim=True) + 1e-10)
+
+        # first order
+        non_local_cos = F.relu(torch.matmul(f_phi_normed, f_phi_normed.transpose(1, 2)))
+        non_local_cos[non_local_cos < fo_th] = 0
+        non_local_cos_fo = non_local_cos.clone()
+        non_local_cos_fo = non_local_cos_fo / (torch.sum(non_local_cos_fo, dim=1, keepdim=True) + 1e-5)
+
+        # high order
+        base_th = 1. / (h * w)
+        non_local_cos[:, torch.arange(h * w), torch.arange(w * h)] = 0  # 对角线清零
+        non_local_cos = non_local_cos / (torch.sum(non_local_cos, dim=1, keepdim=True) + 1e-5)
+        non_local_cos_ho = non_local_cos.clone()
+        so_th = base_th * so_th
+        for _ in range(order - 1):
+            non_local_cos_ho = torch.matmul(non_local_cos_ho, non_local_cos)
+            non_local_cos_ho = non_local_cos_ho / (torch.sum(non_local_cos_ho, dim=1, keepdim=True) + 1e-10)
+        non_local_cos_ho[non_local_cos_ho < so_th] = 0
+        return non_local_cos_fo, non_local_cos_ho
+
+    def normalize_feat(self, feat):
+        n, fh, fw = feat.size()
+        feat = feat.view(n, -1)
+        min_val, _ = torch.min(feat, dim=-1, keepdim=True)
+        max_val, _ = torch.max(feat, dim=-1, keepdim=True)
+        norm_feat = (feat - min_val) / (max_val - min_val + 1e-15)
+        norm_feat = norm_feat.view(n, fh, fw)
+        return norm_feat
+
+    def cal_sc(self, feat):
+        F1_2, F3, F4, F5 = feat
+        sc_fo_2, sc_so_2, sc_fo_3, sc_so_3, sc_fo_4, sc_so_4, sc_fo_5, sc_so_5 = [None] * 8
+        fo_th, so_th, order, stage = self.args.scg_fosc_th, self.args.scg_sosc_th, self.args.scg_order, self.args.scg_blocks
+        if '2' in stage:
+            fo_2, so_2 = self.hsc(F1_2, fo_th, so_th, order)
+            sc_fo_2 = fo_2.clone().detach()
+            sc_so_2 = so_2.clone().detach()
+        if '3' in stage:
+            fo_3, so_3 = self.hsc(F3, fo_th, so_th, order)
+            sc_fo_3 = fo_3.clone().detach()
+            sc_so_3 = so_3.clone().detach()
+        if '4' in stage:
+            fo_4, so_4 = self.hsc(F4, fo_th, so_th, order)
+            sc_fo_4 = fo_4.clone().detach()
+            sc_so_4 = so_4.clone().detach()
+        if '5' in stage:
+            fo_5, so_5 = self.hsc(F5, fo_th, so_th, order)
+            sc_fo_5 = fo_5.clone().detach()
+            sc_so_5 = so_5.clone().detach()
+        return (sc_fo_2, sc_fo_3, sc_fo_4, sc_fo_5), (sc_so_2, sc_so_3, sc_so_4, sc_so_5)
+
+    # def _feat_product(self, feat):
+    #     C1_2, C3, C4, feat_5 = feat
+    #     f_phi = feat_5
+    #     n, c_nl, h, w = f_phi.size()
+    #     if h != 14 or w != 14:
+    #         h, w = 14, 14
+    #         f_phi = F.interpolate(f_phi, size=(h, w), mode='bilinear', align_corners=True)
+    #     f_phi_clone = f_phi.clone().permute(0, 2, 3, 1).contiguous().view(n, -1, c_nl)
+    #     f_phi_normed = f_phi_clone / (torch.norm(f_phi_clone, dim=2, keepdim=True) + 1e-10)
+    #     qk = F.relu(torch.matmul(f_phi_normed, f_phi_normed.transpose(1, 2)))
+    #     q_k = qk.clone()
+    #     q_k = q_k / (torch.sum(q_k, dim=1, keepdim=True) + 1e-5)
+    #     sc_fo, sc_so = self.hsc(f_phi, fo_th=self.args.scg_fosc_th,
+    #                             so_th=self.args.scg_sosc_th,
+    #                             order=self.args.scg_order)
+    #     edge_code = torch.max(sc_fo, sc_so)  # (n,196,196)
+    #     qke = q_k + edge_code  # (n,196,196)
+    #     att = torch.softmax(qke, -1)
+    #     sa_qkev = torch.matmul(att, f_phi_clone).permute(0, 2, 1).contiguous().view(n, c_nl, h, w)
+    #     return sa_qkev
+
+    # def _forward_spa_SelfProduct(self, train_flag, feat):
+    #     C1_2, C3, C4, feat_5 = feat
+    #     # test self-product of feature
+    #     sc_fo, sc_so = None, None
+    #     cls_layer_in = None
+    #     if train_flag:
+    #         cls_layer_in = self._feat_product(feat)
+    #
+    #     if not train_flag:
+    #         sc_fo, sc_so = self.cal_sc((C1_2, C3, C4, feat_5))
+    #         cls_layer_in = feat_5
+    #     cls_map = self.cls(cls_layer_in)
+    #     return cls_map, sc_fo, sc_so
+
+    def cal_edge(self, feat_45):
+        f4, f5 = feat_45
+        e_codes = []
+        if '4' in self.args.sa_edge_stage:
+            fo4, so4 = self.hsc(f4, fo_th=0.2, so_th=1, order=2)
+            ec_4 = torch.max(fo4, so4)
+            ec_4 = ec_4.detach()
+            # ec_4 = ec_4 / (torch.sum(ec_4, dim=1, keepdim=True) + 1e-10)
+            e_codes.append(ec_4)
+        if '5' in self.args.sa_edge_stage:
+            fo5, so5 = self.hsc(f5, fo_th=0.2, so_th=1, order=2)
+            ec_5 = torch.max(fo5, so5)
+            ec_5 = ec_5.detach()
+            # ec_5 = ec_5 / (torch.sum(ec_5, dim=1, keepdim=True) + 1e-10)
+            e_codes.append(ec_5)
+        ec = 0
+        for code in e_codes:
+            ec += code
+        return ec
 
     def get_masked_pseudo_gt(self, gt_scm, fg_th, bg_th, method='MSE_BCE', bg_idx=None, fg_idx=None):
         # for BCE: convert scm to [0,1] binary mask.
@@ -115,7 +237,6 @@ class VGG(nn.Module):
                 mask_fg = torch.full(gt_scm.size(), fg_idx)
                 gt_scm = torch.where(gt_scm >= fg_th, mask_fg, mask_bg)
             pass
-
         return gt_scm
 
     def get_scm(self, logits, gt_label, sc_maps_fo, sc_maps_so):
@@ -195,22 +316,36 @@ class VGG(nn.Module):
         ra_loss = torch.mean(cls_map * bg_mask + (1 - cls_map) * fg_mask)
         return ra_loss
 
-    def get_loss(self, logits, gt_child_label, pre_hm, gt_hm, epoch):
+    def get_loss(self, loss_params):
+        epoch, logits, label, hg_logits, pred_sos, gt_sos = loss_params.get('current_epoch'), loss_params.get('cls_logits'),\
+                                                            loss_params.get('cls_label'), loss_params.get('hg_logits'),\
+                                                            loss_params.get('pred_sos'), loss_params.get('gt_sos')
         if self.args.use_tap == 'True' and self.args.tap_start <= epoch:
-            cls_logits = self.thr_avg_pool(logits)
+            cls_logits = self.thr_avg_pool(logits)  # TAP
         else:
-            cls_logits = torch.mean(torch.mean(logits, dim=2), dim=2)  # (n, 200)
+            cls_logits = torch.mean(torch.mean(logits, dim=2), dim=2)  # GAP:(n, 200)
         loss = 0
-        loss += self.ce_loss(cls_logits, gt_child_label.long())
+        loss += self.ce_loss(cls_logits, label.long())
+        if 'hinge' in self.args.mode:
+            print("[TEST] loss before => ", loss.data)
+            hg_cls_logits = torch.mean(torch.mean(hg_logits, dim=2), dim=2)  # GAP
+            min_val, _ = torch.min(hg_cls_logits, dim=-1, keepdim=True)
+            max_val, _ = torch.max(hg_cls_logits, dim=-1, keepdim=True)
+            norm_logits = (hg_cls_logits - min_val) / (max_val - min_val + 1e-15)
+            hinge_loss = self.hinge_loss(norm_logits, label.long(), p=2, margin=0.8)
+            print("[TEST] loss hinge => ", 0.5 * hinge_loss.data)
+            loss += self.args.hinge_loss_weight * hinge_loss
+        else:
+            hinge_loss = torch.zeros_like(loss)
         if 'sos' in self.args.mode and epoch >= self.args.sos_start:
             # print("[TEST] loss before => ", loss)
-            sos_loss = self.get_sos_loss(pre_hm, gt_hm)
+            sos_loss = self.get_sos_loss(pred_sos, gt_sos)
             # print("[TEST] loss sos => ", sos_loss)
             loss += self.args.sos_loss_weight * sos_loss
         else:
             sos_loss = torch.zeros_like(loss)
         if self.args.ram and epoch >= self.args.ram_start:
-            ra_loss = self.get_ra_loss(logits, gt_child_label, self.args.ram_th_bg, self.args.ram_bg_fg_gap)
+            ra_loss = self.get_ra_loss(logits, label, self.args.ram_th_bg, self.args.ram_bg_fg_gap)
             loss += self.args.ra_loss_weight * ra_loss
         else:
             ra_loss = torch.zeros_like(loss)
@@ -226,93 +361,7 @@ class VGG(nn.Module):
         #     rcst_loss = torch.zeros_like(loss)
 
         # return loss, ra_loss, sos_loss, rcst_loss
-        return loss, ra_loss, sos_loss
-
-    def normalize_feat(self, feat):
-        n, fh, fw = feat.size()
-        feat = feat.view(n, -1)
-        min_val, _ = torch.min(feat, dim=-1, keepdim=True)
-        max_val, _ = torch.max(feat, dim=-1, keepdim=True)
-        norm_feat = (feat - min_val) / (max_val - min_val + 1e-15)
-        norm_feat = norm_feat.view(n, fh, fw)
-        return norm_feat
-
-    def cal_sc(self, feat):
-        F1_2, F3, F4, F5 = feat
-        sc_fo_2, sc_so_2, sc_fo_3, sc_so_3, sc_fo_4, sc_so_4, sc_fo_5, sc_so_5 = [None] * 8
-        fo_th, so_th, order, stage = self.args.scg_fosc_th, self.args.scg_sosc_th, self.args.scg_order, self.args.scg_blocks
-        if '2' in stage:
-            fo_2, so_2 = self.hsc(F1_2, fo_th, so_th, order)
-            sc_fo_2 = fo_2.clone().detach()
-            sc_so_2 = so_2.clone().detach()
-        if '3' in stage:
-            fo_3, so_3 = self.hsc(F3, fo_th, so_th, order)
-            sc_fo_3 = fo_3.clone().detach()
-            sc_so_3 = so_3.clone().detach()
-        if '4' in stage:
-            fo_4, so_4 = self.hsc(F4, fo_th, so_th, order)
-            sc_fo_4 = fo_4.clone().detach()
-            sc_so_4 = so_4.clone().detach()
-        if '5' in stage:
-            fo_5, so_5 = self.hsc(F5, fo_th, so_th, order)
-            sc_fo_5 = fo_5.clone().detach()
-            sc_so_5 = so_5.clone().detach()
-        return (sc_fo_2, sc_fo_3, sc_fo_4, sc_fo_5), (sc_so_2, sc_so_3, sc_so_4, sc_so_5)
-
-    # def _feat_product(self, feat):
-    #     C1_2, C3, C4, feat_5 = feat
-    #     f_phi = feat_5
-    #     n, c_nl, h, w = f_phi.size()
-    #     if h != 14 or w != 14:
-    #         h, w = 14, 14
-    #         f_phi = F.interpolate(f_phi, size=(h, w), mode='bilinear', align_corners=True)
-    #     f_phi_clone = f_phi.clone().permute(0, 2, 3, 1).contiguous().view(n, -1, c_nl)
-    #     f_phi_normed = f_phi_clone / (torch.norm(f_phi_clone, dim=2, keepdim=True) + 1e-10)
-    #     qk = F.relu(torch.matmul(f_phi_normed, f_phi_normed.transpose(1, 2)))
-    #     q_k = qk.clone()
-    #     q_k = q_k / (torch.sum(q_k, dim=1, keepdim=True) + 1e-5)
-    #     sc_fo, sc_so = self.hsc(f_phi, fo_th=self.args.scg_fosc_th,
-    #                             so_th=self.args.scg_sosc_th,
-    #                             order=self.args.scg_order)
-    #     edge_code = torch.max(sc_fo, sc_so)  # (n,196,196)
-    #     qke = q_k + edge_code  # (n,196,196)
-    #     att = torch.softmax(qke, -1)
-    #     sa_qkev = torch.matmul(att, f_phi_clone).permute(0, 2, 1).contiguous().view(n, c_nl, h, w)
-    #     return sa_qkev
-
-    # def _forward_spa_SelfProduct(self, train_flag, feat):
-    #     C1_2, C3, C4, feat_5 = feat
-    #     # test self-product of feature
-    #     sc_fo, sc_so = None, None
-    #     cls_layer_in = None
-    #     if train_flag:
-    #         cls_layer_in = self._feat_product(feat)
-    #
-    #     if not train_flag:
-    #         sc_fo, sc_so = self.cal_sc((C1_2, C3, C4, feat_5))
-    #         cls_layer_in = feat_5
-    #     cls_map = self.cls(cls_layer_in)
-    #     return cls_map, sc_fo, sc_so
-
-    def cal_edge(self, feat_45):
-        f4, f5 = feat_45
-        e_codes = []
-        if '4' in self.args.sa_edge_stage:
-            fo4, so4 = self.hsc(f4, fo_th=0.2, so_th=1, order=2)
-            ec_4 = torch.max(fo4, so4)
-            # ec_4 = ec_4.detach()
-            # ec_4 = ec_4 / (torch.sum(ec_4, dim=1, keepdim=True) + 1e-10)
-            e_codes.append(ec_4)
-        if '5' in self.args.sa_edge_stage:
-            fo5, so5 = self.hsc(f5, fo_th=0.2, so_th=1, order=2)
-            ec_5 = torch.max(fo5, so5)
-            # ec_5 = ec_5.detach()
-            # ec_5 = ec_5 / (torch.sum(ec_5, dim=1, keepdim=True) + 1e-10)
-            e_codes.append(ec_5)
-        ec = 0
-        for code in e_codes:
-            ec += code
-        return ec
+        return loss, ra_loss, sos_loss, hinge_loss
 
     def _forward_spa(self, train_flag, feat):
         C1_2, C3, C4, feat_5 = feat
@@ -321,6 +370,15 @@ class VGG(nn.Module):
         if not train_flag:
             sc_fo, sc_so = self.cal_sc(feat)
         return cls_map, sc_fo, sc_so  # 训练时sc_fo和sc_so=None
+
+    def _forward_spa_hinge(self, train_flag, feat):
+        C1_2, C3, C4, feat_5 = feat
+        sc_fo, sc_so = None, None
+        cls_map = self.cls(feat_5)
+        hg_map = self.hinge(feat_5)
+        if not train_flag:
+            sc_fo, sc_so = self.cal_sc(feat)
+        return cls_map, hg_map, sc_fo, sc_so  # 训练时sc_fo和sc_so=None
 
     def _forward_spa_sa(self, train_flag, current_epoch, feat):
         C1_2, C3, C4, feat_5 = feat
@@ -360,31 +418,65 @@ class VGG(nn.Module):
             sos_map = sos_map.squeeze()
         return cls_map, sos_map, sc_fo, sc_so
 
+    # def _forward_sos_sa(self, train_flag, current_epoch, feat):
+    #     C1_2, C3, C4, feat_5 = feat
+    #     batch, channel, _, _ = feat_5.shape
+    #     sc_fo, sc_so = self.cal_sc(feat)
+    #     sos_map = None
+    #     if train_flag:
+    #         if self.args.sos_start <= current_epoch:
+    #             sos_map = self.sos(feat_5)
+    #             sos_map = sos_map.squeeze()
+    #         if self.args.sa_start <= current_epoch:
+    #             edge_code = None
+    #             if self.args.sa_use_edge == 'True':
+    #                 edge_code = self.cal_edge((C4, feat_5))
+    #             sa_in = feat_5.view(batch, channel, -1).permute(0, 2, 1)
+    #             cls_in = self.sa(sa_in, sa_in, sa_in, edge_code)
+    #         else:
+    #             cls_in = feat_5
+    #     else:
+    #         sos_map = self.sos(feat_5)
+    #         edge_code = None
+    #         if self.args.sa_use_edge == 'True':
+    #             edge_code = self.cal_edge((C4, feat_5))
+    #         sa_in = feat_5.view(batch, channel, -1).permute(0, 2, 1)
+    #         cls_in = self.sa(sa_in, sa_in, sa_in, edge_code)
+    #     cls_map = self.cls(cls_in)
+    #     return cls_map, sos_map, sc_fo, sc_so
     def _forward_sos_sa(self, train_flag, current_epoch, feat):
+        """
+        move sa module to sos branch
+        """
         C1_2, C3, C4, feat_5 = feat
+        cls_map = self.cls(feat_5)
         batch, channel, _, _ = feat_5.shape
         sc_fo, sc_so = self.cal_sc(feat)
         sos_map = None
         if train_flag:
+            try:
+                assert self.args.sos_start <= self.args.sa_start
+            except:
+                raise Exception("[Error] sos start must before sa start! ")
             if self.args.sos_start <= current_epoch:
-                sos_map = self.sos(feat_5)
+                if self.args.sa_start <= current_epoch:
+                    edge_code = None
+                    if self.args.sa_use_edge == 'True':
+                        edge_code = self.cal_edge((C4, feat_5))
+                    sa_in = feat_5.view(batch, channel, -1).permute(0, 2, 1)
+                    sos_in = self.sa(sa_in, sa_in, sa_in, edge_code)
+                else:
+                    sos_in = feat_5
+                sos_map = self.sos(sos_in)
                 sos_map = sos_map.squeeze()
-            if self.args.sa_start <= current_epoch:
-                edge_code = None
-                if self.args.sa_use_edge == 'True':
-                    edge_code = self.cal_edge((C4, feat_5))
-                sa_in = feat_5.view(batch, channel, -1).permute(0, 2, 1)
-                cls_in = self.sa(sa_in, sa_in, sa_in, edge_code)
-            else:
-                cls_in = feat_5
         else:
-            sos_map = self.sos(feat_5)
             edge_code = None
             if self.args.sa_use_edge == 'True':
                 edge_code = self.cal_edge((C4, feat_5))
             sa_in = feat_5.view(batch, channel, -1).permute(0, 2, 1)
-            cls_in = self.sa(sa_in, sa_in, sa_in, edge_code)
-        cls_map = self.cls(cls_in)
+            sos_in = self.sa(sa_in, sa_in, sa_in, edge_code)
+            sos_map = self.sos(sos_in)
+            sos_map = sos_map.squeeze()
         return cls_map, sos_map, sc_fo, sc_so
 
     # def _forward_rcst(self, train_flag, current_epoch, feat):
@@ -482,6 +574,8 @@ class VGG(nn.Module):
         feat = (C1_2, C3, C4, feat_5)
         if self.args.mode == 'spa':
             return self._forward_spa(train_flag, feat)
+        if self.args.mode == 'spa+hinge':
+            return self._forward_spa_hinge(train_flag, feat)
         if self.args.mode == 'spa+sa':
             return self._forward_spa_sa(train_flag, cur_epoch, feat)
         if self.args.mode == 'sos':
@@ -497,32 +591,6 @@ class VGG(nn.Module):
         # if self.args.mode == 'sst+sa':
         #     pass
         raise Exception("[Error] Invalid training mode: ", self.args.mode)
-
-    def hsc(self, f_phi, fo_th=0.2, so_th=1, order=2):
-        n, c_nl, h, w = f_phi.size()
-        if h != 14 or w != 14:
-            h, w = 14, 14
-            f_phi = F.interpolate(f_phi, size=(h, w), mode='bilinear', align_corners=True)
-        f_phi = f_phi.permute(0, 2, 3, 1).contiguous().view(n, -1, c_nl)
-        f_phi_normed = f_phi / (torch.norm(f_phi, dim=2, keepdim=True) + 1e-10)
-
-        # first order
-        non_local_cos = F.relu(torch.matmul(f_phi_normed, f_phi_normed.transpose(1, 2)))
-        non_local_cos[non_local_cos < fo_th] = 0
-        non_local_cos_fo = non_local_cos.clone()
-        non_local_cos_fo = non_local_cos_fo / (torch.sum(non_local_cos_fo, dim=1, keepdim=True) + 1e-5)
-
-        # high order
-        base_th = 1. / (h * w)
-        non_local_cos[:, torch.arange(h * w), torch.arange(w * h)] = 0  # 对角线清零
-        non_local_cos = non_local_cos / (torch.sum(non_local_cos, dim=1, keepdim=True) + 1e-5)
-        non_local_cos_ho = non_local_cos.clone()
-        so_th = base_th * so_th
-        for _ in range(order - 1):
-            non_local_cos_ho = torch.matmul(non_local_cos_ho, non_local_cos)
-            non_local_cos_ho = non_local_cos_ho / (torch.sum(non_local_cos_ho, dim=1, keepdim=True) + 1e-10)
-        non_local_cos_ho[non_local_cos_ho < so_th] = 0
-        return non_local_cos_fo, non_local_cos_ho
 
     # def get_masked_obj(self, sos_map, img):
     #     b_s, _, h, w = np.shape(img)
