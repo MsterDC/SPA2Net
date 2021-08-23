@@ -14,6 +14,9 @@
 #### - bash ./scripts/val_spa.sh
 #### - You also need to pay attention to the parameters in the script which you want to asign.
 ### [Network Arcs]
+#### SOS
 <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/SOS%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
+SPA+SA
 <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/SPA%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
+SPA
 <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/SPA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
