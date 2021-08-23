@@ -5,7 +5,6 @@ cd ../exper/
 python train_sst.py \
     --arch=vgg_sst \
     --epoch=100 \
-    --lr=0.001 \
     --batch_size=64 \
     --gpus=0,1,2,3 \
     --dataset=cub \
@@ -15,12 +14,11 @@ python train_sst.py \
     --resume=False \
     --pretrained_model=vgg16.pth \
     --seed=0 \
-    --snapshot_dir=../snapshots/vgg16_sos_#4 \
-    --log_dir=../log/vgg16_sos_#4 \
+    --snapshot_dir=../snapshots/vgg16_spa+hinge_#1 \
+    --log_dir=../log/vgg16_spa+hinge_#1 \
     --onehot=False \
     --decay_point=80 \
     --in_norm=True \
-    --ram \
     --ram_start=20 \
     --ra_loss_weight=0.5 \
     --ram_th_bg=0.1 \
@@ -47,15 +45,19 @@ python train_sst.py \
     --use_tap=False \
     --tap_th=0.1 \
     --tap_start=0 \
-    --mode=sos \
+    --mode=spa+hinge \
     --watch_cam \
+    --hinge_lr=0.00005 \
+    --hinge_loss_weight=1 \
+    --lr=0.001 \
+#    --ram \
+
 
 #    --rcst_lr=0.000005 \
 #    --rcst_signal=ori \
 #    --rcst_loss_weight=0.1 \
 #    --rcst_start=10 \
 #    --rcst_ratio=700 \
-# mode = spa / sos / rcst / sst / spa+sa / sos+sa / rcst+sa / sst+sa
+# mode = spa / sos / spa+sa / sos+sa / spa+hinge
 # sos_gt_method = BCE / MSE_BCE / CE2D
-# rcst_signal = scm / sos / ori
 # sos_seg = cam / scm / none
