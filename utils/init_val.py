@@ -69,6 +69,7 @@ class opts(object):
         self.parser.add_argument("--iou_th", type=float, default=0.5, help='the threshold for iou.')
         self.parser.add_argument("--use_tap", type=str, default='False')
         self.parser.add_argument("--tap_th", type=float, default=0.1, help='threshold avg pooling')
+        self.parser.add_argument("--sos_method", type=str, default='MSE')
         self.parser.add_argument("--mode", type=str, default='sos+sa')
 
     def parse(self):
@@ -398,9 +399,9 @@ def eval_loc_all(args, loc_params):
 
         # SOS localization
         if 'sos' in args.mode:
-            output = F.sigmoid(pred_sos)
-            # pred_sos = torch.where(output >= 0.9, torch.ones_like(output), torch.zeros_like(output))
-            locerr_sos, wrong_detail_sos, pred_box, maps_sos = eval_loc_sos(output, img_path[0], label_in,
+            if args.sos_method == 'BCE':
+                pred_sos = F.sigmoid(pred_sos)
+            locerr_sos, wrong_detail_sos, pred_box, maps_sos = eval_loc_sos(pred_sos, img_path[0], label_in,
                                                                             gt_boxes[idx], threshold=th,
                                                                             iou_th=args.iou_th)
             # record SOS location error

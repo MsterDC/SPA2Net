@@ -76,9 +76,9 @@ class opts(object):
 
         self.parser.add_argument("--sos_lr", type=float, default=0.001)
         self.parser.add_argument("--sos_gt_seg", type=str, default='True', help='True / False')
-        self.parser.add_argument("--sos_gt_method", type=str, default='BCE', help='BCE / MSE_BCE / CE2D')
-        self.parser.add_argument("--sos_fg_th", type=float, default=0.01, help='for generating pseudo gt scm')
-        self.parser.add_argument("--sos_bg_th", type=float, default=0.01, help='for generating pseudo gt scm')
+        self.parser.add_argument("--sos_seg_method", type=str, default='BCE', help='BC / TC')
+        self.parser.add_argument("--sos_fg_th", type=float, default=0.01, help='segment pseudo gt scm')
+        self.parser.add_argument("--sos_bg_th", type=float, default=0.01, help='segment pseudo gt scm')
         self.parser.add_argument("--sos_loss_weight", type=float, default=0.1, help='loss weight for the sos loss.')
         self.parser.add_argument("--sos_start", type=float, default=10, help='the start epoch to introduce sos.')
 
@@ -101,7 +101,7 @@ class opts(object):
         self.parser.add_argument("--hinge_lr", type=float, default=0.001)
         self.parser.add_argument("--hinge_loss_weight", type=float, default=0.1)
 
-        self.parser.add_argument("--mode", type=str, default='sos+sa', help='spa/spa+hinge/sos/spa+sa/sos+sa/')
+        self.parser.add_argument("--mode", type=str, default='sos+sa', help='spa/spa+hinge/sos/spa+sa/sos+sa/mc_sos')
         self.parser.add_argument("--watch_cam", action='store_true', help='save cam each iteration')
 
     def parse(self):
