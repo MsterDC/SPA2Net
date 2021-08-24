@@ -50,13 +50,21 @@ class VGG(nn.Module):
             self.sa = ScaledDotProductAttention(d_model=int(args.sa_neu_num), d_k=int(args.sa_neu_num),
                                                 d_v=int(args.sa_neu_num), h=int(args.sa_head))
 
-        if 'sos' in self.args.mode:
+        if 'sos' in self.args.mode and 'mc' not in self.args.mode:
             self.sos = nn.Sequential(
                 nn.Conv2d(512, 1024, kernel_size=3, padding=1, dilation=1),
                 nn.ReLU(True),
                 nn.Conv2d(1024, 1024, kernel_size=3, padding=1, dilation=1),
                 nn.ReLU(True),
                 nn.Conv2d(1024, 1, kernel_size=1, padding=0))
+
+        if 'mc_sos' in self.args.mode:
+            self.mc_sos = nn.Sequential(
+                nn.Conv2d(512, 1024, kernel_size=3, padding=1, dilation=1),
+                nn.ReLU(True),
+                nn.Conv2d(1024, 1024, kernel_size=3, padding=1, dilation=1),
+                nn.ReLU(True),
+                nn.Conv2d(1024, self.num_classes+1, kernel_size=1, padding=0))
 
         if 'hinge' in self.args.mode:
             self.hinge = nn.Sequential(
@@ -214,35 +222,28 @@ class VGG(nn.Module):
             ec += code
         return ec
 
-    def get_masked_pseudo_gt(self, gt_scm, fg_th, bg_th, method='MSE_BCE', bg_idx=None, fg_idx=None):
+    def get_masked_pseudo_gt(self, gt_scm, fg_th, bg_th, method='TC', label=None):
+        # gt_scm: (n, h, w)
         # for BCE: convert scm to [0,1] binary mask.
-        if method == 'BCE':
+        if method == 'BC':
             if fg_th:
-                mask_hm_zero = torch.zeros_like(gt_scm)
-                mask_hm_one = torch.ones_like(gt_scm)
-                gt_scm = torch.where(gt_scm >= fg_th, mask_hm_one, mask_hm_zero)
-            pass
+                mask_hm_bg = torch.zeros_like(gt_scm)
+                mask_hm_fg = torch.ones_like(gt_scm)
+                gt_scm = torch.where(gt_scm >= fg_th, mask_hm_fg, mask_hm_bg)
         # for MSE_BCE: convert scm to [0,value,1] mix mask.
-        elif method == 'MSE_BCE':
+        elif method == 'TC':
             if fg_th and bg_th:
                 mask_hm_zero = torch.zeros_like(gt_scm)
                 mask_hm_one = torch.ones_like(gt_scm)
                 gt_scm = torch.where(gt_scm >= fg_th, mask_hm_one, gt_scm)
                 gt_scm = torch.where(gt_scm <= bg_th, mask_hm_zero, gt_scm)
-            pass
-        # for CE2D: first convert scm to [bg_cls_idx, fg_cls_idx] mask and then convert to one-hot tensor.
-        elif method == 'CE2D':
-            if fg_th:
-                mask_bg = torch.full(gt_scm.size(), bg_idx)
-                mask_fg = torch.full(gt_scm.size(), fg_idx)
-                gt_scm = torch.where(gt_scm >= fg_th, mask_fg, mask_bg)
-            pass
         return gt_scm
 
     def get_scm(self, logits, gt_label, sc_maps_fo, sc_maps_so):
         # get cam
         loc_map = F.relu(logits)
         cam_map = loc_map.data.cpu().numpy()
+        # gt_label: (n, )
         cam_map_ = cam_map[torch.arange(cam_map.shape[0]), gt_label.data.cpu().numpy().astype(int), :, :]  # (bs, w, h)
         cam_map_cls = norm_for_batch_map(cam_map_)  # (64,14,14)
         # using fo/so and diff stage feature to get fused scm.
@@ -269,11 +270,29 @@ class VGG(nn.Module):
         # segment fg/bg for scm or not.
         if self.args.sos_gt_seg == 'True':
             gt_scm = self.get_masked_pseudo_gt(gt_scm, self.args.sos_fg_th, self.args.sos_bg_th,
-                                               method=self.args.sos_gt_method)
+                                               method=self.args.sos_seg_method, label=gt_label)
         gt_scm = gt_scm.detach()
         return gt_scm
 
-    def cross_entropy2d(self, input, target, weight=None, size_average=True):
+    # def cross_entropy2d(self, pred_sos, gt_sos):
+    #     pred_sos = F.softmax(pred_sos, dim=1)
+    #     gt_sos = gt_sos.long()
+    #     return self.ce_loss(pred_sos, gt_sos.long())
+
+    def mc_gt_scm_convert(self, gt_scm, label):
+        # gt_scm: n,w,h, belong to {0, 1}
+        n, w, h = gt_scm.shape
+        mask_hm = gt_scm.view(n, -1)
+        base_label = label.unsqueeze(1).unsqueeze(2).expand_as(gt_scm)
+        mc_mask = base_label.view(n, -1).data.cpu().numpy().tolist()
+        idx = (mask_hm == 0).nonzero()
+        for i in range(idx.size(0)):
+            mc_mask[idx[i, 0]][idx[i, 1]] = 200
+        mc_mask = torch.tensor(mc_mask).to(self.args.device)
+        mc_mask = mc_mask.view(n, w, h)
+        return mc_mask
+
+    def cross_entropy2d(self, input, target, label, size_average=True):
         # input: (n, c, h, w), target: (n, h, w)
         n, c, h, w = input.size()
         # log_p: (n, c, h, w)
@@ -285,24 +304,29 @@ class VGG(nn.Module):
             log_p = F.log_softmax(input, dim=1)
         # log_p: (n*h*w, c)
         log_p = log_p.transpose(1, 2).transpose(2, 3).contiguous()
+        target = self.mc_gt_scm_convert(target, label=label)
         log_p = log_p[target.view(n, h, w, 1).repeat(1, 1, 1, c) >= 0]
         log_p = log_p.view(-1, c)
         # target: (n*h*w,)
         mask = target >= 0
         target = target[mask]
-        loss = F.nll_loss(log_p, target, weight=weight, reduction='mean')
+        loss = F.nll_loss(log_p, target.long(), reduction='sum')
         if size_average:
             loss /= mask.data.sum()
         return loss
 
-    def get_sos_loss(self, pre_hm, gt_hm):
-        if self.args.sos_gt_seg == 'False' or self.args.sos_gt_method == 'MSE_BCE':
-            return self.mse_loss(pre_hm, gt_hm)
+    def get_sos_loss(self, pre_hm, gt_hm, label):
+        if self.args.mode == 'mc_sos' and self.args.sos_seg_method == 'BC':
+            return self.cross_entropy2d(pre_hm, gt_hm, label)
         else:
-            if self.args.sos_gt_method == 'BCE':
-                return self.bce_loss(pre_hm, gt_hm)
-            elif self.args.sos_gt_method == 'CE2D':
-                return self.cross_entropy2d(pre_hm, gt_hm)
+            if self.args.sos_gt_seg == 'False':  # without segment
+                return self.mse_loss(pre_hm, gt_hm)
+            else:  # with segment
+                if self.args.sos_seg_method == 'TC':
+                    return self.mse_loss(pre_hm, gt_hm)
+                elif self.args.sos_seg_method == 'BC':
+                    return self.bce_loss(pre_hm, gt_hm)
+        raise Exception("[Error] Invalid SOS loss type.")
 
     def get_ra_loss(self, logits, label, th_bg=0.3, bg_fg_gap=0.0):
         n, _, _, _ = logits.size()
@@ -327,19 +351,19 @@ class VGG(nn.Module):
         loss = 0
         loss += self.ce_loss(cls_logits, label.long())
         if 'hinge' in self.args.mode:
-            print("[TEST] loss before => ", loss.data)
+            # print("[TEST] loss before => ", loss.data)
             hg_cls_logits = torch.mean(torch.mean(hg_logits, dim=2), dim=2)  # GAP
             min_val, _ = torch.min(hg_cls_logits, dim=-1, keepdim=True)
             max_val, _ = torch.max(hg_cls_logits, dim=-1, keepdim=True)
             norm_logits = (hg_cls_logits - min_val) / (max_val - min_val + 1e-15)
             hinge_loss = self.hinge_loss(norm_logits, label.long(), p=2, margin=0.8)
-            print("[TEST] loss hinge => ", 0.5 * hinge_loss.data)
+            # print("[TEST] loss hinge => ", 0.5 * hinge_loss.data)
             loss += self.args.hinge_loss_weight * hinge_loss
         else:
             hinge_loss = torch.zeros_like(loss)
         if 'sos' in self.args.mode and epoch >= self.args.sos_start:
             # print("[TEST] loss before => ", loss)
-            sos_loss = self.get_sos_loss(pred_sos, gt_sos)
+            sos_loss = self.get_sos_loss(pred_sos, gt_sos, label)
             # print("[TEST] loss sos => ", sos_loss)
             loss += self.args.sos_loss_weight * sos_loss
         else:
@@ -479,6 +503,18 @@ class VGG(nn.Module):
             sos_map = sos_map.squeeze()
         return cls_map, sos_map, sc_fo, sc_so
 
+    def _forward_mc_sos(self, train_flag, current_epoch, feat):
+        C1_2, C3, C4, feat_5 = feat
+        cls_map = self.cls(feat_5)
+        sc_fo, sc_so, sos_map = None, None, None
+        if train_flag:  # train
+            if self.args.sos_start <= current_epoch:
+                sc_fo, sc_so = self.cal_sc(feat)
+                sos_map = self.mc_sos(feat_5)
+        else:  # test
+            sc_fo, sc_so = self.cal_sc(feat)
+            sos_map = self.mc_sos(feat_5)
+        return cls_map, sos_map, sc_fo, sc_so
     # def _forward_rcst(self, train_flag, current_epoch, feat):
     #     """
     #     SPA + RCST forward function.
@@ -582,6 +618,8 @@ class VGG(nn.Module):
             return self._forward_sos(train_flag, cur_epoch, feat)
         if self.args.mode == 'sos+sa':
             return self._forward_sos_sa(train_flag, cur_epoch, feat)
+        if self.args.mode == 'mc_sos':
+            return self._forward_mc_sos(train_flag, cur_epoch, feat)
         # if self.args.mode == 'rcst':
         #     return self._forward_rcst(train_flag, cur_epoch, feat)
         # if self.args.mode == 'sst':
