@@ -14,8 +14,8 @@ python train_sst.py \
     --resume=False \
     --pretrained_model=vgg16.pth \
     --seed=0 \
-    --snapshot_dir=../snapshots/vgg16_mc_sos_#1 \
-    --log_dir=../log/vgg16_mc_sos_#1 \
+    --snapshot_dir=../snapshots/vgg16_mc_sos_#4 \
+    --log_dir=../log/vgg16_mc_sos_#4 \
     --onehot=False \
     --decay_point=80 \
     --in_norm=True \
@@ -32,10 +32,10 @@ python train_sst.py \
     --sos_lr=0.01 \
     --sos_gt_seg=True \
     --sos_seg_method=BC \
-    --sos_fg_th=0.5 \
+    --sos_fg_th=0.2 \
     --sos_bg_th=0.2 \
     --sos_loss_weight=0.5 \
-    --sos_start=20 \
+    --sos_start=0 \
     --sa_lr=0.001 \
     --sa_use_edge=True \
     --sa_edge_stage=5 \
@@ -45,13 +45,12 @@ python train_sst.py \
     --use_tap=False \
     --tap_th=0.1 \
     --tap_start=0 \
-    --mode=mc_sos \
     --watch_cam \
     --hinge_lr=0.00005 \
     --hinge_loss_weight=1 \
-    --lr=0.001 \
+    --mode=mc_sos \
     --ram \
-
+    --lr=0.001 \
 
 #    --rcst_lr=0.000005 \
 #    --rcst_signal=ori \

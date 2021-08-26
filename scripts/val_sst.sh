@@ -10,9 +10,9 @@ python val_sst.py \
     --test_list=../data/CUB_200_2011/list/test.txt \
     --test_box=../data/CUB_200_2011/list/test_boxes.txt \
     --num_classes=200 \
-    --snapshot_dir=../snapshots/vgg16_sos_#7 \
+    --snapshot_dir=../snapshots/vgg16_mc_sos_#3 \
     --onehot=False \
-    --debug_dir=../debug/vgg16_sos_#7_t1 \
+    --debug_dir=../debug/vgg16_mc_sos_#3_t1 \
     --restore_from=cub_epoch_100.pth.tar \
     --threshold=0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5 \
     --in_norm=True \
@@ -28,6 +28,6 @@ python val_sst.py \
     --sa_neu_num=512 \
     --use_tap=False \
     --tap_th=0.1 \
-    --mode=sos \
+    --mode=mc_sos \
     --debug \
-    --sos_method=MSE \
+    --sos_method=BC \
