@@ -253,7 +253,7 @@ def log_init(args):
 
     if 'sos' in args.mode:
         losses_so = AverageMeter()
-        log_head += 'loss_so \t '
+        log_head += 'loss_so \t'
     if 'hinge' in args.mode:
         losses_hg = AverageMeter()
         log_head += 'loss_hg \t'
@@ -263,7 +263,7 @@ def log_init(args):
     #     log_head += 'loss_rcst \t '
     if args.ram:
         losses_ra = AverageMeter()
-        log_head += 'loss_ra \t '
+        log_head += 'loss_ra \t'
 
     return_params.append(losses_so)
     return_params.append(losses_hg)

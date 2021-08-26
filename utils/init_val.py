@@ -6,6 +6,7 @@ import argparse
 
 import torch
 import torch.nn.functional as F
+import numpy as np
 
 from utils import AverageMeter
 from utils import evaluate
@@ -69,7 +70,7 @@ class opts(object):
         self.parser.add_argument("--iou_th", type=float, default=0.5, help='the threshold for iou.')
         self.parser.add_argument("--use_tap", type=str, default='False')
         self.parser.add_argument("--tap_th", type=float, default=0.1, help='threshold avg pooling')
-        self.parser.add_argument("--sos_method", type=str, default='MSE')
+        self.parser.add_argument("--sos_method", type=str, default='TC')
         self.parser.add_argument("--mode", type=str, default='sos+sa')
 
     def parse(self):
@@ -219,8 +220,7 @@ def eval_loc_all(args, loc_params):
     if 'hinge' in args.mode:
         hg_norm_logits, loc_map_hg = loc_params.get('hg_norm_logits'), loc_params.get('loc_map_hg')
 
-    if 'sos' in args.mode:
-        pred_sos = loc_params.get('pred_sos')
+    pred_sos = loc_params.get('pred_sos') if 'sos' in args.mode else None
 
     for th in args.threshold:
         # CAM localization: top_maps与原始图像尺寸相同
@@ -399,9 +399,19 @@ def eval_loc_all(args, loc_params):
 
         # SOS localization
         if 'sos' in args.mode:
-            if args.sos_method == 'BCE':
-                pred_sos = F.sigmoid(pred_sos)
-            locerr_sos, wrong_detail_sos, pred_box, maps_sos = eval_loc_sos(pred_sos, img_path[0], label_in,
+            sos_output = None
+            if args.sos_method == 'BC' and 'mc_sos' not in args.mode:
+                sos_output = torch.sigmoid(pred_sos)
+            elif 'mc_sos' in args.mode and args.sos_method == 'BC':
+                _logits = cls_logits[0].data.cpu().numpy()  # 200
+                species_cls = np.argsort(_logits)[::-1][:5]
+                # top5_pred_sos = []
+                # for i in range(5):
+                #     top5_pred_sos.append(pred_sos[species_cls[i]])
+                # top5_pred_sos = get_top_max(top5_pred_sos)
+                top1_pred_sos = pred_sos[species_cls[0]]
+                sos_output = torch.sigmoid(top1_pred_sos)
+            locerr_sos, wrong_detail_sos, pred_box, maps_sos = eval_loc_sos(sos_output, img_path[0], label_in,
                                                                             gt_boxes[idx], threshold=th,
                                                                             iou_th=args.iou_th)
             # record SOS location error
@@ -502,3 +512,10 @@ def print_fun(args, print_params):
             print('== Hinge Gt-Known loc err ==\n')
             print('CAM-Hinge-Top1: {:.2f} \n'.format(loc_err['gt_known_locerr_hinge_{}'.format(th)].avg))
             print('SCG-Hinge-Top1: {:.2f} \n'.format(loc_err['gt_known_locerr_scg_hinge_{}'.format(th)].avg))
+
+
+def get_top_max(feat):
+    max_mat = feat[0]
+    for mat in feat[1:]:
+        max_mat = torch.max(max_mat, mat)
+    return max_mat
