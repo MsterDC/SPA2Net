@@ -102,6 +102,8 @@ def val(args):
                 logits, _, _, _ = model(input_cls_img, train_flag=False)
             if args.mode == 'spa+hinge':
                 logits, hg_logits, _, _ = model(input_cls_img, train_flag=False)
+            if args.mode == 'mc_sos':
+                logits, _, _, _ = model(input_cls_img, train_flag=False)
             # if args.mode == 'rcst':
             #     logits, _, _, _ = model(input_cls_img, train_flag=False)
             # if args.mode == 'sst':
@@ -151,6 +153,8 @@ def val(args):
                 logits, pred_sos, sc_maps_fo, sc_maps_so = model(input_loc_img, train_flag=False)
             if args.mode == 'spa+hinge':
                 logits, hg_logits, sc_maps_fo, sc_maps_so = model(input_loc_img, train_flag=False)
+            if args.mode == 'mc_sos':
+                logits, pred_sos, sc_maps_fo, sc_maps_so = model(input_loc_img, train_flag=False)
             # if args.mode == 'rcst':
             #     logits, sc_maps_fo, sc_maps_so, rcst_map = model(input_loc_img, train_flag=False)
             # if args.mode == 'sst':

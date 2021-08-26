@@ -1,4 +1,5 @@
 import sys
+
 sys.path.append('../')
 import os
 import time
@@ -7,6 +8,7 @@ import datetime
 import torch
 import torch.nn.functional as F
 from tensorboardX import SummaryWriter
+import numpy as np
 
 from utils import my_optim
 from utils.init_train import get_model, opts, save_checkpoint, reproducibility_set, log_init
@@ -105,6 +107,8 @@ def train(args):
                 logits, pred_sos, sc_maps_fo, sc_maps_so = model(x=input_img, cur_epoch=current_epoch)
             if args.mode == 'sos+sa':
                 logits, pred_sos, sc_maps_fo, sc_maps_so = model(x=input_img, cur_epoch=current_epoch)
+            if args.mode == 'mc_sos':
+                logits, pred_sos, sc_maps_fo, sc_maps_so = model(x=input_img, cur_epoch=current_epoch)
 
             # if args.mode == 'rcst':
             #     logits, sc_maps_fo, sc_maps_so, rcst_map = model(input_img, cur_epoch=current_epoch)
@@ -149,10 +153,11 @@ def train(args):
             optimizer.step()
 
             # global average pooling
-            if args.use_tap == 'True' and args.tap_start <= current_epoch:
-                cls_logits = model.module.thr_avg_pool(logits)
-            else:
-                cls_logits = torch.mean(torch.mean(logits, dim=2), dim=2)  # (n, 200)
+            cls_logits = model.module.thr_avg_pool(
+                logits) if (args.use_tap == 'True') and (args.tap_start <= current_epoch) else torch.mean(
+                torch.mean(logits, dim=2), dim=2)
+
+            hg_cls_logits = torch.mean(torch.mean(logits_hg, dim=2), dim=2) if 'hinge' in args.mode else None
 
             if not args.onehot == 'True':
                 prec1, prec5 = evaluate.accuracy(cls_logits.data, label.long(), topk=(1, 5))
@@ -210,13 +215,18 @@ def train(args):
                         watch_cls_logits = cls_logits[idx]
                         watch_img_path = im
                         watch_label = label.long()[idx]
+                        if 'hinge' in args.mode:
+                            watch_hg_cam = F.relu(logits_hg)[idx]
+                            watch_hg_cls_logits = hg_cls_logits[idx]
                         if 'sos' in args.mode and current_epoch >= args.sos_start:
                             watch_gt = [gt_scm[idx]]
                             watch_scm = [(sc_maps_fo[-2][idx], sc_maps_fo[-1][idx]),
                                          (sc_maps_so[-2][idx], sc_maps_so[-1][idx])]
-                            if args.sos_gt_method == 'BCE':
-                                output = F.sigmoid(pred_sos[idx])
-                                watch_sos = [torch.where(output >= args.sos_fg_th, torch.ones_like(output), torch.zeros_like(output))]
+                            if args.sos_seg_method == 'BC':  # sigmoid & threshold
+                                watch_sos = pred_sos[idx]
+                                if 'mc_sos' in args.mode:
+                                    watch_sos = watch_sos[watch_label]
+                                watch_sos = [torch.sigmoid(watch_sos)]
                             else:
                                 watch_sos = [pred_sos[idx]]
                         save_flag = False
@@ -225,21 +235,23 @@ def train(args):
         if args.watch_cam:
             save_cam(args, watch_trans_img, watch_cam, watch_cls_logits, watch_img_path, watch_label, current_epoch)
             if 'sos' in args.mode and current_epoch >= args.sos_start:
-                save_sos(args, watch_trans_img, watch_gt, watch_img_path, current_epoch, suffix='gt_sos')
                 save_sos(args, watch_trans_img, watch_sos, watch_img_path, current_epoch, suffix='sos')
-                save_scm(args, watch_trans_img, watch_scm, watch_img_path, current_epoch, suffix='scm45')
+                save_sos(args, watch_trans_img, watch_gt, watch_img_path, current_epoch, suffix='gt_sos')
+                save_scm(args, watch_trans_img, watch_scm, watch_img_path, current_epoch, suffix='sc_4+5')
+            if 'hinge' in args.mode:
+                save_cam(args, watch_trans_img, watch_hg_cam, watch_hg_cls_logits, watch_img_path, watch_label,
+                         current_epoch, suffix='cam_hg')
 
         # training end
         current_epoch += 1
         if current_epoch % 10 == 0:
             save_checkpoint(args,
-                            {
-                                'epoch': current_epoch,
-                                'arch': args.arch,
-                                'global_counter': global_counter,
-                                'state_dict': model.state_dict(),
-                                'optimizer': optimizer.state_dict()
-                            }, is_best=False,
+                            {'epoch': current_epoch,
+                             'arch': args.arch,
+                             'global_counter': global_counter,
+                             'state_dict': model.state_dict(),
+                             'optimizer': optimizer.state_dict()
+                             }, is_best=False,
                             filename='%s_epoch_%d.pth.tar'
                                      % (args.dataset, current_epoch))
 
