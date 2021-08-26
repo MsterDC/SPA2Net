@@ -22,3 +22,5 @@ SPA
 <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/SPA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
 SPA+Hinge
 <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/SPA%2BHinge%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
+Multi-channel SOS
+<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/Multi-Channel%20SOS%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
