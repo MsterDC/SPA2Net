@@ -6,7 +6,7 @@ from torchvision import transforms
 import torch
 
 
-def save_cam(args, tras_img, save_cam, cls_logits, img_path, gt_label, epoch, threshold=0.4, suffix='cam'):
+def save_cam(args, tras_img, save_cam, cls_logits, img_path, gt_label, epoch, threshold=0.3, suffix='cam'):
     im = cv2.imread(img_path)
     h, w, _ = np.shape(im)
     # 将image转换为cv2
@@ -68,7 +68,8 @@ def save_cam(args, tras_img, save_cam, cls_logits, img_path, gt_label, epoch, th
     pass
 
 
-def save_sos(args, ts_img, scm, img_path, epoch, threshold=0.35, suffix=''):
+def save_sos(args, ts_img, scm, img_path, epoch, threshold=0.3, suffix=''):
+
     im = cv2.imread(img_path)
     h, w, _ = np.shape(im)
     # 将image转换为cv2
@@ -92,6 +93,8 @@ def save_sos(args, ts_img, scm, img_path, epoch, threshold=0.35, suffix=''):
                 fontScale=0.5)
     cam_to_save = [draw_ts.copy()]
     for m in scm:
+        # if gt_label is not None:
+        #     m = m[gt_label, :, :]
         draw_im = 255 * np.ones((h + 15, w, 3), np.uint8)
         draw_im[:h, :, :] = im
         m = m.data.cpu().numpy()

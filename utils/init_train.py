@@ -1,7 +1,5 @@
 import sys
 sys.path.append('../')
-import torch
-from torch import optim
 import argparse
 import os
 import shutil
@@ -9,9 +7,13 @@ import numpy as np
 import warnings
 import random
 import torch
+from torch import optim
 import torch.nn.functional as F
 import torch.backends.cuda as cudnn
+from torch.optim.lr_scheduler import StepLR, ExponentialLR
+from torch.optim.sgd import SGD
 
+from utils.scheduler import GradualWarmupScheduler
 from utils.restore import restore
 from utils import AverageMeter, MoveAverageMeter
 from models import *
@@ -110,6 +112,16 @@ class opts(object):
         opt.gpus = list(map(int, opt.gpus.split(',')))
         opt.gpus = [i for i in range(len(opt.gpus))] if opt.gpus[0] >= 0 else [-1]
         return opt
+
+
+def get_scheduler(optim):
+    # scheduler_warmup is chained with schduler_steplr
+    scheduler_steplr = StepLR(optim, step_size=10, gamma=0.1)
+    scheduler_warmup = GradualWarmupScheduler(optim, multiplier=1, total_epoch=5, after_scheduler=scheduler_steplr)
+
+    # this zero gradient update is needed to avoid a warning message, issue #8.
+    optim.zero_grad()
+    optim.step()
 
 
 def get_model(args):
