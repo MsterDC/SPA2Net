@@ -207,7 +207,12 @@ def train(args):
                 writer.add_scalar('top5', top5.avg, global_counter)
 
             if args.watch_cam:
-                want_im = 'Scarlet_Tanager_0083_138500'
+                if args.dataset == 'cub':
+                    want_im = 'Scarlet_Tanager_0083_138500'
+                elif args.dataset == 'ilsvrc':
+                    want_im = 'n01440764_2574'
+                else:
+                    raise Exception('[Error] Invalid dataset!')
                 for idx, im in enumerate(img_path):
                     if want_im in im and save_flag is True:
                         watch_trans_img = input_img[idx]
