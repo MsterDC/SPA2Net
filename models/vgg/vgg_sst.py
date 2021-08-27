@@ -214,24 +214,6 @@ class VGG(nn.Module):
     #     cls_map = self.cls(cls_layer_in)
     #     return cls_map, sc_fo, sc_so
 
-    def cal_edge(self, feat_45):
-        f4, f5 = feat_45
-        e_codes = []
-        if '4' in self.args.sa_edge_stage:
-            fo4, so4 = self.hsc(f4, fo_th=0.2, so_th=1, order=2)
-            ec_4 = torch.max(fo4, so4)
-            ec_4 = ec_4.detach()
-            e_codes.append(ec_4)
-        if '5' in self.args.sa_edge_stage:
-            fo5, so5 = self.hsc(f5, fo_th=0.2, so_th=1, order=2)
-            ec_5 = torch.max(fo5, so5)
-            ec_5 = ec_5.detach()
-            e_codes.append(ec_5)
-        ec = 0
-        for code in e_codes:
-            ec += code
-        return ec
-
     def get_scm(self, logits, gt_label, sc_maps_fo, sc_maps_so):
         # get cam
         loc_map = F.relu(logits)
@@ -294,10 +276,7 @@ class VGG(nn.Module):
         return gt_scm
 
     def get_sos_loss(self, pre_hm, gt_hm, label):
-        # sos_cls_loss = 0
         if 'mc_sos' in self.args.mode and self.args.sos_seg_method == 'BC':
-            # cls_logits_sos = torch.mean(torch.mean(pre_hm, dim=2), dim=2)
-            # sos_cls_loss = self.ce_loss(cls_logits_sos, label.long())
             pre_hm = pre_hm[torch.arange(pre_hm.shape[0]), label.long(), ...]  # (n, w, h)
         if self.args.sos_gt_seg == 'False' or self.args.sos_seg_method == 'TC':
             return self.mse_loss(pre_hm, gt_hm)
@@ -340,7 +319,6 @@ class VGG(nn.Module):
         #     # print("[TEST] rcst_added_loss:", loss)
         # else:
         #     rcst_loss = torch.zeros_like(loss)
-
         # return loss, ra_loss, sos_loss, rcst_loss
         return loss, ra_loss, sos_loss, hinge_loss
 
@@ -352,25 +330,47 @@ class VGG(nn.Module):
             sc_fo, sc_so = self.cal_sc(feat)
         return cls_map, sc_fo, sc_so  # 训练时sc_fo和sc_so=None
 
+    def cal_edge(self, feat_45):
+        s_fo_th = self.args.scg_fosc_th
+        s_so_th = self.args.scg_sosc_th
+        s_order = self.args.scg_order
+        ff4, ff5 = feat_45
+        _mixed_edges = 0
+        e_codes = []
+        if '4' in self.args.sa_edge_stage:
+            edge_fo4, edge_so4 = self.hsc(ff4, fo_th=s_fo_th, so_th=s_so_th, order=s_order)
+            mixed_edge_4 = torch.max(edge_fo4, edge_so4)
+            # mixed_edge_4 = mixed_edge_4 / (torch.sum(mixed_edge_4, dim=1, keepdim=True) + 1e-10)
+            e_codes.append(mixed_edge_4)
+        if '5' in self.args.sa_edge_stage:
+            edge_fo5, edge_so5 = self.hsc(ff5, fo_th=s_fo_th, so_th=s_so_th, order=s_order)
+            mixed_edge_5 = torch.max(edge_fo5, edge_so5)
+            # mixed_edge_5 = mixed_edge_5 / (torch.sum(mixed_edge_5, dim=1, keepdim=True) + 1e-10)
+            e_codes.append(mixed_edge_5)
+        for c in e_codes:
+            _mixed_edges += c
+        _mixed_edges = _mixed_edges.detach()
+        return _mixed_edges
+
     def _forward_spa_sa(self, train_flag, current_epoch, feat):
-        C1_2, C3, C4, feat_5 = feat
+        f12, f3, f4, f5 = feat
+        batch, channel, _, _ = f5.shape
         sc_fo, sc_so = None, None
-        batch, channel, _, _ = feat_5.shape
         if train_flag:
             if current_epoch >= self.args.sa_start:
-                sa_in = feat_5.view(batch, channel, -1).permute(0, 2, 1)
-                edge_code = None
+                sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
+                ho_self_corr = None
                 if self.args.sa_use_edge == 'True':
-                    edge_code = self.cal_edge((C4, feat_5))
-                cls_in = self.sa(sa_in, sa_in, sa_in, edge_code)
+                    ho_self_corr = self.cal_edge((f4, f5))
+                cls_in = self.sa(sa_in, sa_in, sa_in, ho_self_corr)
             else:
-                cls_in = feat_5
+                cls_in = f5
         else:
+            sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
             sc_fo, sc_so = self.cal_sc(feat)
             edge_code = None
             if self.args.sa_use_edge == 'True':
-                edge_code = self.cal_edge((C4, feat_5))
-            sa_in = feat_5.view(batch, channel, -1).permute(0, 2, 1)
+                edge_code = self.cal_edge((f4, f5))
             cls_in = self.sa(sa_in, sa_in, sa_in, edge_code)
         cls_map = self.cls(cls_in)
         return cls_map, sc_fo, sc_so
@@ -562,23 +562,23 @@ class VGG(nn.Module):
     #     pass
 
     def forward(self, x, train_flag=True, cur_epoch=500):
-        C1_2 = self.conv1_2(x)
-        C3 = self.conv3(C1_2)
-        C4 = self.conv4(C3)
-        feat_5 = self.conv5(C4)
-        feat = (C1_2, C3, C4, feat_5)
+        ft_1_2 = self.conv1_2(x)
+        ft_3 = self.conv3(ft_1_2)
+        ft_4 = self.conv4(ft_3)
+        ft_5 = self.conv5(ft_4)
+        ft_1_5 = (ft_1_2, ft_3, ft_4, ft_5)
         if self.args.mode == 'spa':
-            return self._forward_spa(train_flag, feat)
+            return self._forward_spa(train_flag, ft_1_5)
         if self.args.mode == 'spa+hinge':
-            return self._forward_spa_hinge(train_flag, feat)
+            return self._forward_spa_hinge(train_flag, ft_1_5)
         if self.args.mode == 'spa+sa':
-            return self._forward_spa_sa(train_flag, cur_epoch, feat)
+            return self._forward_spa_sa(train_flag, cur_epoch, ft_1_5)
         if self.args.mode == 'sos':
-            return self._forward_sos(train_flag, cur_epoch, feat)
+            return self._forward_sos(train_flag, cur_epoch, ft_1_5)
         if self.args.mode == 'sos+sa':
-            return self._forward_sos_sa(train_flag, cur_epoch, feat)
+            return self._forward_sos_sa(train_flag, cur_epoch, ft_1_5)
         if self.args.mode == 'mc_sos':
-            return self._forward_mc_sos(train_flag, cur_epoch, feat)
+            return self._forward_mc_sos(train_flag, cur_epoch, ft_1_5)
         # if self.args.mode == 'rcst':
         #     return self._forward_rcst(train_flag, cur_epoch, feat)
         # if self.args.mode == 'sst':
