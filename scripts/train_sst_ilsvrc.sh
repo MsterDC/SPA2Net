@@ -4,18 +4,18 @@ cd ../exper/
 
 python train_sst.py \
     --arch=vgg_sst \
-    --epoch=100 \
-    --dataset=cub \
-    --img_dir=../data/CUB_200_2011/images \
-    --train_list=../data/CUB_200_2011/list/train.txt \
-    --num_classes=200 \
+    --epoch=20 \
+    --dataset=ilsvrc \
+    --img_dir=../data/ILSVRC/img_train \
+    --train_list=../data/ILSVRC/list/train_list.txt \
+    --num_classes=1000 \
     --resume=False \
     --pretrained_model=vgg16.pth \
     --seed=0 \
     --onehot=False \
-    --decay_point=80 \
+    --decay_point=10,15 \
     --in_norm=True \
-    --ram_start=20 \
+    --ram_start=5 \
     --ra_loss_weight=0.5 \
     --ram_th_bg=0.1 \
     --ram_bg_fg_gap=0.2 \
@@ -28,9 +28,9 @@ python train_sst.py \
     --use_tap=False \
     --tap_th=0.1 \
     --tap_start=0 \
-    --snapshot_dir=../snapshots/vgg16_spa+sa_#t10 \
-    --log_dir=../log/vgg16_spa+sa_#t10 \
-    --batch_size=128 \
+    --snapshot_dir=../snapshots/ilsvrc/vgg16_mc_sos_#1 \
+    --log_dir=../log/ilsvrc/vgg16_mc_sos_#1 \
+    --batch_size=64 \
     --gpus=0,1,2,3 \
     --lr=0.001 \
     --sos_lr=0.01 \
@@ -42,14 +42,14 @@ python train_sst.py \
     --sos_start=0 \
     --sa_lr=0.001 \
     --sa_use_edge=True \
-    --sa_edge_stage=4,5 \
+    --sa_edge_stage=5 \
     --sa_start=20 \
-    --sa_head=4 \
+    --sa_head=8 \
     --sa_neu_num=512 \
     --watch_cam \
     --hinge_lr=0.00005 \
     --hinge_loss_weight=1 \
-    --mode=spa+sa \
+    --mode=mc_sos \
     --ram \
 
 #    --rcst_lr=0.000005 \
