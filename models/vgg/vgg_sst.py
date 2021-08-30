@@ -157,28 +157,6 @@ class VGG(nn.Module):
         norm_feat = norm_feat.view(n, fh, fw)
         return norm_feat
 
-    def cal_sc(self, feat):
-        F1_2, F3, F4, F5 = feat
-        sc_fo_2, sc_so_2, sc_fo_3, sc_so_3, sc_fo_4, sc_so_4, sc_fo_5, sc_so_5 = [None] * 8
-        fo_th, so_th, order, stage = self.args.scg_fosc_th, self.args.scg_sosc_th, self.args.scg_order, self.args.scg_blocks
-        if '2' in stage:
-            fo_2, so_2 = self.hsc(F1_2, fo_th, so_th, order)
-            sc_fo_2 = fo_2.clone().detach()
-            sc_so_2 = so_2.clone().detach()
-        if '3' in stage:
-            fo_3, so_3 = self.hsc(F3, fo_th, so_th, order)
-            sc_fo_3 = fo_3.clone().detach()
-            sc_so_3 = so_3.clone().detach()
-        if '4' in stage:
-            fo_4, so_4 = self.hsc(F4, fo_th, so_th, order)
-            sc_fo_4 = fo_4.clone().detach()
-            sc_so_4 = so_4.clone().detach()
-        if '5' in stage:
-            fo_5, so_5 = self.hsc(F5, fo_th, so_th, order)
-            sc_fo_5 = fo_5.clone().detach()
-            sc_so_5 = so_5.clone().detach()
-        return (sc_fo_2, sc_fo_3, sc_fo_4, sc_fo_5), (sc_so_2, sc_so_3, sc_so_4, sc_so_5)
-
     # def _feat_product(self, feat):
     #     C1_2, C3, C4, feat_5 = feat
     #     f_phi = feat_5
@@ -250,14 +228,26 @@ class VGG(nn.Module):
         return gt_scm
 
     def get_cls_loss(self, logits, label):
-        return self.ce_loss(logits, label.long())
+        if self.args.cls_or_hinge == 'cls':
+            return self.ce_loss(logits, label.long())
+        elif self.args.cls_or_hinge == 'hinge':
+            if self.args.hinge_norm == 'softmax':
+                normed_logits = torch.softmax(logits, dim=-1)
+            elif self.args.hinge_norm == 'norm':
+                min_val, _ = torch.min(logits, dim=-1, keepdim=True)
+                max_val, _ = torch.max(logits, dim=-1, keepdim=True)
+                normed_logits = (logits - min_val) / (max_val - min_val + 1e-15)
+            return self.hinge_loss(normed_logits, label.long(), p=self.args.hinge_p, margin=self.args.hinge_m)
 
     def get_hinge_loss(self, hg_logits, label):
         hg_cls_logits = torch.mean(torch.mean(hg_logits, dim=2), dim=2)  # GAP
-        min_val, _ = torch.min(hg_cls_logits, dim=-1, keepdim=True)
-        max_val, _ = torch.max(hg_cls_logits, dim=-1, keepdim=True)
-        norm_logits = (hg_cls_logits - min_val) / (max_val - min_val + 1e-15)
-        hinge_loss = self.hinge_loss(norm_logits, label.long(), p=2, margin=0.8)
+        if self.args.hinge_norm == 'softmax':
+            normed_logits = torch.softmax(hg_cls_logits, dim=-1)
+        elif self.args.hinge_norm == 'norm':
+            min_val, _ = torch.min(hg_cls_logits, dim=-1, keepdim=True)
+            max_val, _ = torch.max(hg_cls_logits, dim=-1, keepdim=True)
+            normed_logits = (hg_cls_logits - min_val) / (max_val - min_val + 1e-15)
+        hinge_loss = self.hinge_loss(normed_logits, label.long(), p=self.args.hinge_p, margin=self.args.hinge_m)
         return hinge_loss
 
     def get_masked_pseudo_gt(self, gt_scm, fg_th, bg_th, method='TC'):
@@ -330,6 +320,28 @@ class VGG(nn.Module):
             sc_fo, sc_so = self.cal_sc(feat)
         return cls_map, sc_fo, sc_so  # 训练时sc_fo和sc_so=None
 
+    def cal_sc(self, feat):
+        F1_2, F3, F4, F5 = feat
+        sc_fo_2, sc_so_2, sc_fo_3, sc_so_3, sc_fo_4, sc_so_4, sc_fo_5, sc_so_5 = [None] * 8
+        fo_th, so_th, order, stage = self.args.scg_fosc_th, self.args.scg_sosc_th, self.args.scg_order, self.args.scg_blocks
+        if '2' in stage:
+            fo_2, so_2 = self.hsc(F1_2, fo_th, so_th, order)
+            sc_fo_2 = fo_2.clone().detach()
+            sc_so_2 = so_2.clone().detach()
+        if '3' in stage:
+            fo_3, so_3 = self.hsc(F3, fo_th, so_th, order)
+            sc_fo_3 = fo_3.clone().detach()
+            sc_so_3 = so_3.clone().detach()
+        if '4' in stage:
+            fo_4, so_4 = self.hsc(F4, fo_th, so_th, order)
+            sc_fo_4 = fo_4.clone().detach()
+            sc_so_4 = so_4.clone().detach()
+        if '5' in stage:
+            fo_5, so_5 = self.hsc(F5, fo_th, so_th, order)
+            sc_fo_5 = fo_5.clone().detach()
+            sc_so_5 = so_5.clone().detach()
+        return (sc_fo_2, sc_fo_3, sc_fo_4, sc_fo_5), (sc_so_2, sc_so_3, sc_so_4, sc_so_5)
+
     def cal_edge(self, feat_45):
         s_fo_th = self.args.scg_fosc_th
         s_so_th = self.args.scg_sosc_th
@@ -375,6 +387,62 @@ class VGG(nn.Module):
         cls_map = self.cls(cls_in)
         return cls_map, sc_fo, sc_so
 
+    def _forward_sos_sa(self, train_flag, current_epoch, feat):
+        """
+        move sa module to sos branch
+        """
+        f12, f3, f4, f5 = feat
+        cls_map = self.cls(f5)
+        batch, channel, _, _ = f5.shape
+        sc_fo, sc_so = self.cal_sc(feat)
+        sos_map = None
+        if train_flag:  # train
+            try:
+                assert self.args.sos_start <= self.args.sa_start
+            except:
+                raise Exception("[Error] sos start must before sa start! ")
+            if self.args.sos_start <= current_epoch:
+                if self.args.sa_start <= current_epoch:
+                    edge_code = None
+                    if self.args.sa_use_edge == 'True':
+                        edge_code = self.cal_edge((f4, f5))
+                    sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
+                    sos_in = self.sa(sa_in, sa_in, sa_in, edge_code)
+                else:
+                    sos_in = f5
+                if 'mc_sos' in self.args.mode:
+                    sos_map = self.mc_sos(sos_in)
+                else:
+                    sos_map = self.sos(sos_in)
+                    sos_map = sos_map.squeeze()
+        else:  # test
+            edge_code = None
+            if self.args.sa_use_edge == 'True':
+                edge_code = self.cal_edge((f4, f5))
+            sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
+            sos_in = self.sa(sa_in, sa_in, sa_in, edge_code)
+            if 'mc_sos' in self.args.mode:
+                sos_map = self.mc_sos(sos_in)
+                sos_map = sos_map.squeeze()
+            else:
+                sos_map = self.sos(sos_in)
+                sos_map = sos_map.squeeze()
+        return cls_map, sos_map, sc_fo, sc_so
+
+    def _forward_mc_sos(self, train_flag, current_epoch, feat):
+        C1_2, C3, C4, feat_5 = feat
+        cls_map = self.cls(feat_5)
+        sc_fo, sc_so, sos_map = None, None, None
+        if train_flag:  # train
+            if self.args.sos_start <= current_epoch:
+                sc_fo, sc_so = self.cal_sc(feat)
+                sos_map = self.mc_sos(feat_5)
+        else:  # test
+            sc_fo, sc_so = self.cal_sc(feat)
+            sos_map = self.mc_sos(feat_5)
+            sos_map = sos_map.squeeze()  # batch_size=1 when testing.
+        return cls_map, sos_map, sc_fo, sc_so
+
     def _forward_sos(self, train_flag, current_epoch, feat):
         C1_2, C3, C4, feat_5 = feat
         cls_map = self.cls(feat_5)
@@ -383,11 +451,11 @@ class VGG(nn.Module):
             if self.args.sos_start <= current_epoch:
                 sc_fo, sc_so = self.cal_sc(feat)
                 sos_map = self.sos(feat_5)
-                sos_map = sos_map.squeeze()
+                sos_map = sos_map.squeeze()  # squeeze cls_channel
         else:  # test
             sc_fo, sc_so = self.cal_sc(feat)
             sos_map = self.sos(feat_5)
-            sos_map = sos_map.squeeze()
+            sos_map = sos_map.squeeze()  # squeeze batch_channel
         return cls_map, sos_map, sc_fo, sc_so
 
     # def _forward_sos_sa(self, train_flag, current_epoch, feat):
@@ -416,40 +484,6 @@ class VGG(nn.Module):
     #         cls_in = self.sa(sa_in, sa_in, sa_in, edge_code)
     #     cls_map = self.cls(cls_in)
     #     return cls_map, sos_map, sc_fo, sc_so
-    def _forward_sos_sa(self, train_flag, current_epoch, feat):
-        """
-        move sa module to sos branch
-        """
-        C1_2, C3, C4, feat_5 = feat
-        cls_map = self.cls(feat_5)
-        batch, channel, _, _ = feat_5.shape
-        sc_fo, sc_so = self.cal_sc(feat)
-        sos_map = None
-        if train_flag:
-            try:
-                assert self.args.sos_start <= self.args.sa_start
-            except:
-                raise Exception("[Error] sos start must before sa start! ")
-            if self.args.sos_start <= current_epoch:
-                if self.args.sa_start <= current_epoch:
-                    edge_code = None
-                    if self.args.sa_use_edge == 'True':
-                        edge_code = self.cal_edge((C4, feat_5))
-                    sa_in = feat_5.view(batch, channel, -1).permute(0, 2, 1)
-                    sos_in = self.sa(sa_in, sa_in, sa_in, edge_code)
-                else:
-                    sos_in = feat_5
-                sos_map = self.sos(sos_in)
-                sos_map = sos_map.squeeze()
-        else:
-            edge_code = None
-            if self.args.sa_use_edge == 'True':
-                edge_code = self.cal_edge((C4, feat_5))
-            sa_in = feat_5.view(batch, channel, -1).permute(0, 2, 1)
-            sos_in = self.sa(sa_in, sa_in, sa_in, edge_code)
-            sos_map = self.sos(sos_in)
-            sos_map = sos_map.squeeze()
-        return cls_map, sos_map, sc_fo, sc_so
 
     def _forward_spa_hinge(self, train_flag, feat):
         C1_2, C3, C4, feat_5 = feat
@@ -459,20 +493,6 @@ class VGG(nn.Module):
         if not train_flag:
             sc_fo, sc_so = self.cal_sc(feat)
         return cls_map, hg_map, sc_fo, sc_so
-
-    def _forward_mc_sos(self, train_flag, current_epoch, feat):
-        C1_2, C3, C4, feat_5 = feat
-        cls_map = self.cls(feat_5)
-        sc_fo, sc_so, sos_map = None, None, None
-        if train_flag:  # train
-            if self.args.sos_start <= current_epoch:
-                sc_fo, sc_so = self.cal_sc(feat)
-                sos_map = self.mc_sos(feat_5)
-        else:  # test
-            sc_fo, sc_so = self.cal_sc(feat)
-            sos_map = self.mc_sos(feat_5)
-            sos_map = sos_map.squeeze()  # batch_size=1 when testing.
-        return cls_map, sos_map, sc_fo, sc_so
 
     # def _forward_rcst(self, train_flag, current_epoch, feat):
     #     """
@@ -575,7 +595,7 @@ class VGG(nn.Module):
             return self._forward_spa_sa(train_flag, cur_epoch, ft_1_5)
         if self.args.mode == 'sos':
             return self._forward_sos(train_flag, cur_epoch, ft_1_5)
-        if self.args.mode == 'sos+sa':
+        if self.args.mode == 'sos+sa' or self.args.mode == 'mc_sos+sa':
             return self._forward_sos_sa(train_flag, cur_epoch, ft_1_5)
         if self.args.mode == 'mc_sos':
             return self._forward_mc_sos(train_flag, cur_epoch, ft_1_5)

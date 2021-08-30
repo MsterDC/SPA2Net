@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch.nn import init
-
+import torch.nn.functional as F
 
 class ScaledDotProductAttention(nn.Module):
 
@@ -41,29 +41,33 @@ class ScaledDotProductAttention(nn.Module):
                 if m.bias is not None:
                     init.constant_(m.bias, 0)
 
-    def forward(self, queries, keys, values, edge_code=None,
-                attention_mask=None, attention_weights=None):
-        b_s, nq, c = queries.shape  # (bs, h*w, c_n)
+    def forward(self, queries, keys, values, self_corr=None, attention_mask=None, attention_weights=None):
+        bt_sz, nq, cc = queries.shape  # (bs, h*w, c_n)
         nk = keys.shape[1]  # h*w
-        q = self.fc_q(queries).view(b_s, nq, self.h, self.d_k).permute(0, 2, 1, 3)  # (b_s, h, nq, d_k)
-        k = self.fc_k(keys).view(b_s, nk, self.h, self.d_k).permute(0, 2, 3, 1)  # (b_s, h, d_k, nk)
-        v = self.fc_v(values).view(b_s, nk, self.h, self.d_v).permute(0, 2, 1, 3)  # (b_s, h, nk, d_v)
 
-        att = torch.matmul(q, k) / np.sqrt(self.d_k)  # (b_s, h, nq, nk)
+        q = self.fc_q(queries).view(bt_sz, nq, self.h, self.d_k).permute(0, 2, 1, 3)  # (b_s, h, nq, d_k)
+        k = self.fc_k(keys).view(bt_sz, nk, self.h, self.d_k).permute(0, 2, 3, 1)  # (b_s, h, d_k, nk)
+        v = self.fc_v(values).view(bt_sz, nk, self.h, self.d_v).permute(0, 2, 1, 3)  # (b_s, h, nk, d_v)
 
-        if edge_code is not None:
-            edge_code = edge_code.view(b_s, -1, nq, nk)
-            att += edge_code
+        att_qk = torch.matmul(q, k) / np.sqrt(self.d_k)  # (b_s, h, nq, nk)
+
+        # relu & normalize
+        # att_qk = F.relu(att_qk)
+        # att_qk = att_qk / (torch.sum(att_qk, dim=2, keepdim=True) + 1e-10)
+
+        if self_corr is not None:
+            self_corr = self_corr.view(bt_sz, -1, nq, nk)
+            att_qk += self_corr
         if attention_weights is not None:
-            att = att * attention_weights
+            att_qk = att_qk * attention_weights
         if attention_mask is not None:
-            att = att.masked_fill(attention_mask, -np.inf)
+            att_qk = att_qk.masked_fill(attention_mask, -np.inf)
 
-        att = torch.softmax(att, -1)
-        att = self.dropout(att)
+        att_qk = torch.softmax(att_qk, -1)
+        att_qk = self.dropout(att_qk)
 
-        out = torch.matmul(att, v).permute(0, 2, 1, 3).contiguous().view(b_s, nq, self.h * self.d_v)  # (b_s, nq, h*d_v)
-        out = self.fc_o(out)  # (b_s, nq, d_model)
-        out = out.transpose(1, 2).contiguous().view(b_s, c, int(np.sqrt(nq)), int(np.sqrt(nq)))
-        return out
+        att_qkv = torch.matmul(att_qk, v).permute(0, 2, 1, 3).contiguous().view(bt_sz, nq, self.h * self.d_v)  # (b_s, nq, h*d_v)
+        att_qkv = self.fc_o(att_qkv)  # (b_s, nq, d_model)
+        att_qkv = att_qkv.transpose(1, 2).contiguous().view(bt_sz, cc, int(np.sqrt(nq)), int(np.sqrt(nq)))
+        return att_qkv
 
