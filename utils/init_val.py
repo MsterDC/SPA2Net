@@ -405,10 +405,6 @@ def eval_loc_all(args, loc_params):
             elif 'mc_sos' in args.mode and args.sos_method == 'BC':
                 _logits = cls_logits[0].data.cpu().numpy()  # 200
                 species_cls = np.argsort(_logits)[::-1][:5]
-                # top5_pred_sos = []
-                # for i in range(5):
-                #     top5_pred_sos.append(pred_sos[species_cls[i]])
-                # top5_pred_sos = get_top_max(top5_pred_sos)
                 top1_pred_sos = pred_sos[species_cls[0]]
                 sos_output = torch.sigmoid(top1_pred_sos)
             locerr_sos, wrong_detail_sos, pred_box, maps_sos = eval_loc_sos(sos_output, img_path[0], label_in,
