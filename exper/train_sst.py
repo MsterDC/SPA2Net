@@ -105,7 +105,7 @@ def train(args):
                 logits, _, _ = model(x=input_img, cur_epoch=current_epoch)
             if args.mode == 'sos':
                 logits, pred_sos, sc_maps_fo, sc_maps_so = model(x=input_img, cur_epoch=current_epoch)
-            if args.mode == 'sos+sa':
+            if args.mode == 'sos+sa' or args.mode == 'mc_sos+sa':
                 logits, pred_sos, sc_maps_fo, sc_maps_so = model(x=input_img, cur_epoch=current_epoch)
             if args.mode == 'mc_sos':
                 logits, pred_sos, sc_maps_fo, sc_maps_so = model(x=input_img, cur_epoch=current_epoch)

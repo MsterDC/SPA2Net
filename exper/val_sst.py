@@ -98,7 +98,7 @@ def val(args):
                 logits, _, _ = model(input_cls_img, train_flag=False)
             if args.mode == 'sos':
                 logits, _, _, _ = model(input_cls_img, train_flag=False)
-            if args.mode == 'sos+sa':
+            if args.mode == 'sos+sa' or args.mode == 'mc_sos+sa':
                 logits, _, _, _ = model(input_cls_img, train_flag=False)
             if args.mode == 'spa+hinge':
                 logits, hg_logits, _, _ = model(input_cls_img, train_flag=False)
@@ -149,7 +149,7 @@ def val(args):
                 logits, sc_maps_fo, sc_maps_so = model(input_loc_img, train_flag=False)
             if args.mode == 'sos':
                 logits, pred_sos, sc_maps_fo, sc_maps_so = model(input_loc_img, train_flag=False)
-            if args.mode == 'sos+sa':
+            if args.mode == 'sos+sa' or args.mode == 'mc_sos+sa':
                 logits, pred_sos, sc_maps_fo, sc_maps_so = model(input_loc_img, train_flag=False)
             if args.mode == 'spa+hinge':
                 logits, hg_logits, sc_maps_fo, sc_maps_so = model(input_loc_img, train_flag=False)
