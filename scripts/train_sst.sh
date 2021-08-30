@@ -28,15 +28,15 @@ python train_sst.py \
     --use_tap=False \
     --tap_th=0.1 \
     --tap_start=0 \
-    --snapshot_dir=../snapshots/vgg16_spa+sa_#t10 \
-    --log_dir=../log/vgg16_spa+sa_#t10 \
-    --batch_size=128 \
+    --snapshot_dir=../snapshots/vgg16_mc_sos+sa_#3 \
+    --log_dir=../log/vgg16_mc_sos+sa_#3 \
+    --batch_size=64 \
     --gpus=0,1,2,3 \
     --lr=0.001 \
     --sos_lr=0.01 \
     --sos_gt_seg=True \
     --sos_seg_method=BC \
-    --sos_fg_th=0.2 \
+    --sos_fg_th=0.3 \
     --sos_bg_th=0.2 \
     --sos_loss_weight=0.5 \
     --sos_start=0 \
@@ -47,9 +47,13 @@ python train_sst.py \
     --sa_head=4 \
     --sa_neu_num=512 \
     --watch_cam \
+    --cls_or_hinge=cls \
+    --hinge_norm=norm \
+    --hinge_p=1 \
+    --hinge_m=1 \
     --hinge_lr=0.00005 \
     --hinge_loss_weight=1 \
-    --mode=spa+sa \
+    --mode=mc_sos+sa \
     --ram \
 
 #    --rcst_lr=0.000005 \
@@ -57,6 +61,5 @@ python train_sst.py \
 #    --rcst_loss_weight=0.1 \
 #    --rcst_start=10 \
 #    --rcst_ratio=700 \
-# mode = spa / sos / spa+sa / sos+sa / spa+hinge
-# sos_gt_method = BCE / MSE_BCE / CE2D
-# sos_seg = cam / scm / none
+# mode = spa / sos / mc_sos / mc_sos+sa / spa+sa / sos+sa / spa+hinge
+# sos_seg_method = TC / BC
