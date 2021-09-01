@@ -110,6 +110,29 @@ class VGG(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
+    def get_cls_loss(self, logits, label):
+        if self.args.cls_or_hinge == 'cls':
+            return self.ce_loss(logits, label.long())
+        elif self.args.cls_or_hinge == 'hinge':
+            if self.args.hinge_norm == 'softmax':
+                normed_logits = torch.softmax(logits, dim=-1)
+            elif self.args.hinge_norm == 'norm':
+                min_val, _ = torch.min(logits, dim=-1, keepdim=True)
+                max_val, _ = torch.max(logits, dim=-1, keepdim=True)
+                normed_logits = (logits - min_val) / (max_val - min_val + 1e-15)
+            return self.hinge_loss(normed_logits, label.long(), p=self.args.hinge_p, margin=self.args.hinge_m)
+
+    def get_hinge_loss(self, hg_logits, label):
+        hg_cls_logits = torch.mean(torch.mean(hg_logits, dim=2), dim=2)  # GAP
+        if self.args.hinge_norm == 'softmax':
+            normed_logits = torch.softmax(hg_cls_logits, dim=-1)
+        elif self.args.hinge_norm == 'norm':
+            min_val, _ = torch.min(hg_cls_logits, dim=-1, keepdim=True)
+            max_val, _ = torch.max(hg_cls_logits, dim=-1, keepdim=True)
+            normed_logits = (hg_cls_logits - min_val) / (max_val - min_val + 1e-15)
+        hinge_loss = self.hinge_loss(normed_logits, label.long(), p=self.args.hinge_p, margin=self.args.hinge_m)
+        return hinge_loss
+
     def hsc(self, f_phi, fo_th=0.2, so_th=1, order=2):
         n, c_nl, h, w = f_phi.size()
         if h != 14 or w != 14:
@@ -227,31 +250,7 @@ class VGG(nn.Module):
         gt_scm = gt_scm.detach()
         return gt_scm
 
-    def get_cls_loss(self, logits, label):
-        if self.args.cls_or_hinge == 'cls':
-            return self.ce_loss(logits, label.long())
-        elif self.args.cls_or_hinge == 'hinge':
-            if self.args.hinge_norm == 'softmax':
-                normed_logits = torch.softmax(logits, dim=-1)
-            elif self.args.hinge_norm == 'norm':
-                min_val, _ = torch.min(logits, dim=-1, keepdim=True)
-                max_val, _ = torch.max(logits, dim=-1, keepdim=True)
-                normed_logits = (logits - min_val) / (max_val - min_val + 1e-15)
-            return self.hinge_loss(normed_logits, label.long(), p=self.args.hinge_p, margin=self.args.hinge_m)
-
-    def get_hinge_loss(self, hg_logits, label):
-        hg_cls_logits = torch.mean(torch.mean(hg_logits, dim=2), dim=2)  # GAP
-        if self.args.hinge_norm == 'softmax':
-            normed_logits = torch.softmax(hg_cls_logits, dim=-1)
-        elif self.args.hinge_norm == 'norm':
-            min_val, _ = torch.min(hg_cls_logits, dim=-1, keepdim=True)
-            max_val, _ = torch.max(hg_cls_logits, dim=-1, keepdim=True)
-            normed_logits = (hg_cls_logits - min_val) / (max_val - min_val + 1e-15)
-        hinge_loss = self.hinge_loss(normed_logits, label.long(), p=self.args.hinge_p, margin=self.args.hinge_m)
-        return hinge_loss
-
     def get_masked_pseudo_gt(self, gt_scm, fg_th, bg_th, method='TC'):
-        # gt_scm: (n, h, w)
         # for BC: convert scm to [0,1] binary mask.
         if method == 'BC':
             mask_hm_bg = torch.zeros_like(gt_scm)
@@ -266,13 +265,21 @@ class VGG(nn.Module):
         return gt_scm
 
     def get_sos_loss(self, pre_hm, gt_hm, label):
-        if 'mc_sos' in self.args.mode and self.args.sos_seg_method == 'BC':
+        if 'mc_sos' in self.args.mode:
             pre_hm = pre_hm[torch.arange(pre_hm.shape[0]), label.long(), ...]  # (n, w, h)
-        if self.args.sos_gt_seg == 'False' or self.args.sos_seg_method == 'TC':
+        if self.args.sos_gt_seg == 'False' or self.args.sos_loss_method == 'MSE':
             return self.mse_loss(pre_hm, gt_hm)
+        if self.args.sos_seg_method == 'TC':
+            if self.args.sos_loss_method == 'MSE':
+                return self.mse_loss(pre_hm, gt_hm)
+            elif self.args.sos_loss_method == 'BCE':
+                return self.bce_loss(pre_hm, gt_hm)
         elif self.args.sos_seg_method == 'BC':
-            return self.bce_loss(pre_hm, gt_hm)
-        raise Exception("[Error] Invalid SOS loss type.")
+            if self.args.sos_loss_method == 'MSE':
+                return self.mse_loss(pre_hm, gt_hm)
+            elif self.args.sos_loss_method == 'BCE':
+                return self.bce_loss(pre_hm, gt_hm)
+        raise Exception("[Error] Invalid SOS segmentation or wrong sos loss type.")
 
     def get_loss(self, loss_params):
         loss = 0
