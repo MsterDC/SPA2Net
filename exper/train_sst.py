@@ -227,13 +227,10 @@ def train(args):
                             watch_gt = [gt_scm[idx]]
                             watch_scm = [(sc_maps_fo[-2][idx], sc_maps_fo[-1][idx]),
                                          (sc_maps_so[-2][idx], sc_maps_so[-1][idx])]
-                            if args.sos_seg_method == 'BC':  # sigmoid & threshold
-                                watch_sos = pred_sos[idx]
-                                if 'mc_sos' in args.mode:
-                                    watch_sos = watch_sos[watch_label]
-                                watch_sos = [torch.sigmoid(watch_sos)]
-                            else:
-                                watch_sos = [pred_sos[idx]]
+                            watch_sos = pred_sos[idx]
+                            if 'mc_sos' in args.mode:
+                                watch_sos = watch_sos[watch_label]
+                            watch_sos = [torch.sigmoid(watch_sos)] if args.sos_loss_method == 'BCE' else [watch_sos]
                         save_flag = False
 
         # vis cam during training
