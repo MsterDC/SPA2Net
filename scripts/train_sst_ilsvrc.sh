@@ -28,28 +28,32 @@ python train_sst.py \
     --use_tap=False \
     --tap_th=0.1 \
     --tap_start=0 \
-    --snapshot_dir=../snapshots/ilsvrc/vgg16_mc_sos_#1 \
-    --log_dir=../log/ilsvrc/vgg16_mc_sos_#1 \
-    --batch_size=64 \
+    --snapshot_dir=../snapshots/vgg16_mc_sos+sa_#5 \
+    --log_dir=../log/vgg16_mc_sos+sa_#5 \
+    --batch_size=128 \
     --gpus=0,1,2,3 \
-    --lr=0.001 \
-    --sos_lr=0.01 \
+    --lr=0.002 \
+    --sos_lr=0.02 \
     --sos_gt_seg=True \
     --sos_seg_method=BC \
-    --sos_fg_th=0.2 \
+    --sos_fg_th=0.25 \
     --sos_bg_th=0.2 \
     --sos_loss_weight=0.5 \
     --sos_start=0 \
     --sa_lr=0.001 \
     --sa_use_edge=True \
-    --sa_edge_stage=5 \
+    --sa_edge_stage=4,5 \
     --sa_start=20 \
-    --sa_head=8 \
+    --sa_head=1 \
     --sa_neu_num=512 \
     --watch_cam \
+    --cls_or_hinge=cls \
+    --hinge_norm=norm \
+    --hinge_p=1 \
+    --hinge_m=1 \
     --hinge_lr=0.00005 \
     --hinge_loss_weight=1 \
-    --mode=mc_sos \
+    --mode=mc_sos+sa \
     --ram \
 
 #    --rcst_lr=0.000005 \

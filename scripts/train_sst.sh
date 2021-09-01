@@ -28,15 +28,15 @@ python train_sst.py \
     --use_tap=False \
     --tap_th=0.1 \
     --tap_start=0 \
-    --snapshot_dir=../snapshots/vgg16_mc_sos+sa_#3 \
-    --log_dir=../log/vgg16_mc_sos+sa_#3 \
+    --snapshot_dir=../snapshots/vgg16_mc_sos_#7 \
+    --log_dir=../log/vgg16_mc_sos_#7 \
     --batch_size=64 \
-    --gpus=0,1,2,3 \
+    --gpus=0,1 \
     --lr=0.001 \
     --sos_lr=0.01 \
     --sos_gt_seg=True \
     --sos_seg_method=BC \
-    --sos_fg_th=0.3 \
+    --sos_fg_th=0.35 \
     --sos_bg_th=0.2 \
     --sos_loss_weight=0.5 \
     --sos_start=0 \
@@ -44,7 +44,7 @@ python train_sst.py \
     --sa_use_edge=True \
     --sa_edge_stage=4,5 \
     --sa_start=20 \
-    --sa_head=4 \
+    --sa_head=1 \
     --sa_neu_num=512 \
     --watch_cam \
     --cls_or_hinge=cls \
@@ -53,7 +53,7 @@ python train_sst.py \
     --hinge_m=1 \
     --hinge_lr=0.00005 \
     --hinge_loss_weight=1 \
-    --mode=mc_sos+sa \
+    --mode=mc_sos \
     --ram \
 
 #    --rcst_lr=0.000005 \
