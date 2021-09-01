@@ -246,16 +246,26 @@ def val(args):
                         'top1_locerr_scg_more_wrong_hinge_{}'.format(th)].sum,
                     loc_err['top1_locerr_scg_other_hinge_{}'.format(th)].sum))
             if 'sos' in args.mode:
-                fw.write('SOS-loc_err: {:.2f}\n'.format(loc_err['locerr_sos_{}'.format(th)].avg))
-                fw.write('SOS-err_detail: {} {} {} {} {} {}\n'.format(loc_err['locerr_sos_right_{}'.format(th)].sum,
-                                                                      loc_err['locerr_sos_cls_wrong_{}'.format(th)].sum,
-                                                                      loc_err[
-                                                                          'locerr_sos_mins_wrong_{}'.format(th)].sum,
-                                                                      loc_err[
-                                                                          'locerr_sos_part_wrong_{}'.format(th)].sum,
-                                                                      loc_err[
-                                                                          'locerr_sos_more_wrong_{}'.format(th)].sum,
-                                                                      loc_err['locerr_sos_other_{}'.format(th)].sum))
+                if 'mc_sos' in args.mode:
+                    fw.write('SOS-Top1: {:.2f} Top5: {:.2f}\n'.format(loc_err['top1_locerr_sos_{}'.format(th)].avg,
+                                                                      loc_err['top5_locerr_sos_{}'.format(th)].avg))
+                    fw.write(
+                        'SOS-err_detail: {} {} {} {} {} {}\n'.format(loc_err['top1_locerr_right_sos_{}'.format(th)].sum,
+                                                                     loc_err[
+                                                                         'top1_locerr_cls_wrong_sos_{}'.format(th)].sum,
+                                                                     loc_err[
+                                                                         'top1_locerr_mins_wrong_sos_{}'.format(
+                                                                             th)].sum,
+                                                                     loc_err[
+                                                                         'top1_locerr_part_wrong_sos_{}'.format(
+                                                                             th)].sum,
+                                                                     loc_err[
+                                                                         'top1_locerr_more_wrong_sos_{}'.format(
+                                                                             th)].sum,
+                                                                     loc_err[
+                                                                         'top1_locerr_other_sos_{}'.format(th)].sum))
+                fw.write('SOS-gt_known-loc_err: {:.2f}\n'.format(loc_err['gt_known_locerr_sos_{}'.format(th)].avg))
+
             fw.write('== Gt-Known loc err ==\n')
             fw.write('CAM-Top1: {:.2f} \n'.format(loc_err['gt_known_locerr_{}'.format(th)].avg))
             fw.write('SCG-Top1: {:.2f} \n'.format(loc_err['gt_known_locerr_scg_{}'.format(th)].avg))
