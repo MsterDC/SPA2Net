@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import torch
 from scipy.ndimage import label
 from .vistools import norm_atten_map
 import torch.nn.functional as F
@@ -151,6 +152,54 @@ def get_box_sos(pred_scm, im_file, threshold, gt_labels):
     box = extract_bbox_from_map(fg_map)
     maxk_boxes = [(int(gt_labels[0]),) + box]  # [(label, xmin, ymin, xmax, ymax)]
     result = [maxk_boxes[:k] for k in (1,)]  # [[(label, xmin, ymin, xmax, ymax)]]
+    return result, maxk_maps
+
+
+def get_topk_boxes_mc_sos(logits, mc_sos, im_file, topk=(1, 5), gt_labels=None, threshold=0.2, mode='union'):
+    im = cv2.imread(im_file)
+    h, w, _ = np.shape(im)
+    maxk = max(topk)
+    _logits = logits.data.cpu().numpy()  # 200
+    species_cls = np.argsort(_logits)[::-1][:5]
+    maxk_boxes = []
+    maxk_maps = []
+    for i in range(maxk):
+        top_i_sos = mc_sos[species_cls[i]]  # (c,w,h) => (w,h)
+        sos_map_top_i = torch.sigmoid(top_i_sos)
+        sos_map_top_i = sos_map_top_i.squeeze().data.cpu().numpy()
+        sos_map_top_i = cv2.resize(sos_map_top_i, dsize=(w, h))
+        sos_map_top_i_cls = np.maximum(0, sos_map_top_i)
+        maxk_maps.append(sos_map_top_i_cls.copy())
+        # extract boxes
+        fg_map = sos_map_top_i_cls >= threshold
+        if mode == 'max':
+            objects, count = label(fg_map)
+            max_area = 0
+            max_box = None
+            for idx in range(1, count + 1):
+                obj = (objects == idx)
+                box = extract_bbox_from_map(obj)
+                area = (box[2] - box[0] + 1) * (box[3] - box[1] + 1)
+                if area > max_area:
+                    max_area = area
+                    max_box = box
+            if max_box is None:
+                max_box = (0, 0, 0, 0)
+            if gt_labels is not None:
+                max_box = (int(gt_labels[0]),) + max_box
+            else:
+                max_box = (species_cls[i],) + max_box
+            maxk_boxes.append(max_box)
+        elif mode == 'union':
+            box = extract_bbox_from_map(fg_map)
+            if gt_labels is not None:
+                maxk_boxes.append((int(gt_labels[0]),) + box)
+            else:
+                maxk_boxes.append((species_cls[i],) + box)
+        else:
+            raise KeyError('invalid mode! Please set the mode in [\'max\', \'union\']')
+
+    result = [maxk_boxes[:k] for k in topk]
     return result, maxk_maps
 
 
