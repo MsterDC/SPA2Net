@@ -76,7 +76,8 @@ class opts(object):
         self.parser.add_argument("--lr", type=float, default=LR)
         self.parser.add_argument("--sos_lr", type=float, default=0.001)
         self.parser.add_argument("--sos_gt_seg", type=str, default='True', help='True / False')
-        self.parser.add_argument("--sos_seg_method", type=str, default='BCE', help='BC / TC')
+        self.parser.add_argument("--sos_seg_method", type=str, default='BC', help='BC / TC')
+        self.parser.add_argument("--sos_loss_method", type=str, default='BCE', help='BCE / MSE')
         self.parser.add_argument("--sos_fg_th", type=float, default=0.01, help='segment pseudo gt scm')
         self.parser.add_argument("--sos_bg_th", type=float, default=0.01, help='segment pseudo gt scm')
         self.parser.add_argument("--sos_loss_weight", type=float, default=0.1, help='loss weight for the sos loss.')
@@ -115,7 +116,6 @@ def get_scheduler(optim):
     # scheduler_warmup is chained with schduler_steplr
     scheduler_steplr = StepLR(optim, step_size=10, gamma=0.1)
     scheduler_warmup = GradualWarmupScheduler(optim, multiplier=1, total_epoch=5, after_scheduler=scheduler_steplr)
-
     # this zero gradient update is needed to avoid a warning message, issue #8.
     optim.zero_grad()
     optim.step()

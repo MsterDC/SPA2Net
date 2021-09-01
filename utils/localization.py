@@ -155,7 +155,7 @@ def get_box_sos(pred_scm, im_file, threshold, gt_labels):
     return result, maxk_maps
 
 
-def get_topk_boxes_mc_sos(logits, mc_sos, im_file, topk=(1, 5), gt_labels=None, threshold=0.2, mode='union'):
+def get_topk_boxes_mc_sos(logits, sos_map, im_file, topk=(1, 5), gt_labels=None, threshold=0.2, mode='union', loss_method='BCE'):
     im = cv2.imread(im_file)
     h, w, _ = np.shape(im)
     maxk = max(topk)
@@ -164,8 +164,8 @@ def get_topk_boxes_mc_sos(logits, mc_sos, im_file, topk=(1, 5), gt_labels=None, 
     maxk_boxes = []
     maxk_maps = []
     for i in range(maxk):
-        top_i_sos = mc_sos[species_cls[i]]  # (c,w,h) => (w,h)
-        sos_map_top_i = torch.sigmoid(top_i_sos)
+        top_i_sos = sos_map[species_cls[i]] if len(sos_map.shape) > 2 else sos_map
+        sos_map_top_i = torch.sigmoid(top_i_sos) if loss_method == 'BCE' else top_i_sos
         sos_map_top_i = sos_map_top_i.squeeze().data.cpu().numpy()
         sos_map_top_i = cv2.resize(sos_map_top_i, dsize=(w, h))
         sos_map_top_i_cls = np.maximum(0, sos_map_top_i)
