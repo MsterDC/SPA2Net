@@ -36,6 +36,7 @@ python train_sst.py \
     --sos_lr=0.02 \
     --sos_gt_seg=True \
     --sos_seg_method=BC \
+    --sos_loss_method=BCE \
     --sos_fg_th=0.25 \
     --sos_bg_th=0.2 \
     --sos_loss_weight=0.5 \

@@ -22,7 +22,8 @@ python val_sst.py \
     --debug_dir=../debug/ilsvrc/vgg16_mc_sos_#1_t2 \
     --gpus=0 \
     --threshold=0.3,0.35,0.4,0.45,0.5,0.55,0.6 \
-    --sos_method=BC \
+    --sos_seg_method=BC \
+    --sos_loss_method=BCE \
     --sa_use_edge=True \
     --sa_edge_stage=4,5 \
     --sa_head=4 \
