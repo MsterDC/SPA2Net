@@ -54,10 +54,8 @@ def transforms_(args, flag_train, img):
 
 class dataset(Dataset):
     def __init__(self, args, train_flag, onehot_label=False, blur=None):
-        # def __init__(self, args, train_flag, with_path=False, onehot_label=False, blur=None):
         self.args = args
         self.train = train_flag
-        # self.with_path = with_path
         self.onehot_label = onehot_label
         self.blur = blur
 

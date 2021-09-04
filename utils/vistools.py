@@ -57,7 +57,6 @@ def save_im_heatmap_box(im_file, top_maps, topk_boxes, save_dir, gt_label=None, 
         #     gray_map = np.uint8(ratio_color * cam_map_cls)
         ratio_color = 255
         gray_map = np.uint8(ratio_color * cam_map_cls)
-
         heatmap = cv2.applyColorMap(gray_map, cv2.COLORMAP_JET)
 
         #  test  #

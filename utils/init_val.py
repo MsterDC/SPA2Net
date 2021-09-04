@@ -37,23 +37,18 @@ class opts(object):
         self.parser.add_argument("--dataset", type=str, default='cub')
         self.parser.add_argument("--num_classes", type=int, default=200)
         self.parser.add_argument("--arch", type=str, default='vgg_sst')
-        self.parser.add_argument("--threshold", type=str, default='0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45')
         self.parser.add_argument("--lr", type=float, default=LR)
         self.parser.add_argument("--decay_points", type=str, default='none')
         self.parser.add_argument("--epoch", type=int, default=EPOCH)
         self.parser.add_argument("--tencrop", type=str, default='True')
         self.parser.add_argument("--onehot", type=str, default='False')
-        self.parser.add_argument("--gpus", type=str, default='0', help='-1 for cpu, split gpu id by comma')
         self.parser.add_argument("--num_workers", type=int, default=12)
         self.parser.add_argument("--disp_interval", type=int, default=DISP_INTERVAL)
-        self.parser.add_argument("--snapshot_dir", type=str, default='')
         self.parser.add_argument("--resume", type=str, default='True')
         self.parser.add_argument("--restore_from", type=str, default='')
         self.parser.add_argument("--global_counter", type=int, default=0)
         self.parser.add_argument("--current_epoch", type=int, default=0)
-        self.parser.add_argument("--debug", action='store_true', help='.')
         self.parser.add_argument("--debug_detail", action='store_true', help='.')
-        self.parser.add_argument("--debug_dir", type=str, default='../debug', help='save visualization results.')
         self.parser.add_argument("--vis_dir", type=str, default='../vis_dir', help='save visualization results.')
         self.parser.add_argument("--in_norm", type=str, default='True', help='normalize input or not')
         self.parser.add_argument("--scg_blocks", type=str, default='2,3,4,5', help='2 for feat2, etc.')
@@ -63,15 +58,21 @@ class opts(object):
         self.parser.add_argument("--scg_sosc_th", type=float, default=1)
         self.parser.add_argument("--scg_order", type=int, default=2, help='the order of similarity of HSC.')
         self.parser.add_argument("--scg_so_weight", type=float, default=1)
-        self.parser.add_argument("--sa_use_edge", type=str, default='True', help='Add edge encoding or not')
-        self.parser.add_argument("--sa_edge_stage", type=str, default='4,5', help='2 for feat2, etc.')
-        self.parser.add_argument("--sa_head", type=float, default=1, help='number of SA heads')
-        self.parser.add_argument("--sa_neu_num", type=float, default=512, help='size of SA linear input')
         self.parser.add_argument("--iou_th", type=float, default=0.5, help='the threshold for iou.')
         self.parser.add_argument("--use_tap", type=str, default='False')
         self.parser.add_argument("--tap_th", type=float, default=0.1, help='threshold avg pooling')
+        self.parser.add_argument("--snapshot_dir", type=str, default='')
+        self.parser.add_argument("--debug_dir", type=str, default='../debug', help='save visualization results.')
+        self.parser.add_argument("--gpus", type=str, default='0', help='-1 for cpu, split gpu id by comma')
+        self.parser.add_argument("--threshold", type=str, default='0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45')
+        self.parser.add_argument("--sa_use_edge", type=str, default='True', help='Add edge encoding or not')
+        self.parser.add_argument("--sa_edge_stage", type=str, default='4,5', help='2 for feat2, etc.')
+        self.parser.add_argument("--sa_head", type=float, default=8, help='number of SA heads')
+        self.parser.add_argument("--sa_neu_num", type=float, default=512, help='size of SA linear input')
         self.parser.add_argument("--sos_seg_method", type=str, default='TC', help='BC / TC')
         self.parser.add_argument("--sos_loss_method", type=str, default='BCE', help='BCE / MSE')
+        self.parser.add_argument("--scg_version", type=str, default='v2', help='v1 / v2')
+        self.parser.add_argument("--debug", action='store_true', help='.')
         self.parser.add_argument("--mode", type=str, default='sos+sa')
 
     def parse(self):
@@ -104,7 +105,8 @@ def eval_loc(cls_logits, cls_map, img_path, label, gt_boxes, topk=(1, 5), thresh
     return locerr_1, locerr_5, locerr_gt_known[0], top_maps, top5_boxes, gt_known_map, top1_wrong_detail
 
 
-def eval_loc_sos(args, cls_logits, pred_scm, img_path, label, gt_boxes, topk=(1, 5), threshold=None, mode='union', iou_th=0.5):
+def eval_loc_sos(args, cls_logits, pred_scm, img_path, label, gt_boxes, topk=(1, 5), threshold=None, mode='union',
+                 iou_th=0.5):
     # evaluate gt-known loc error
     if len(pred_scm.shape) > 2:
         gt_known_sos = pred_scm[label[0].long()]
@@ -121,7 +123,8 @@ def eval_loc_sos(args, cls_logits, pred_scm, img_path, label, gt_boxes, topk=(1,
     top1_box, top5_boxes = top_boxes
     (locerr_1, locerr_5), top1_wrong_detail = evaluate.locerr((top1_box, top5_boxes), label.data.long().numpy(),
                                                               gt_boxes, topk=(1, 5), iou_th=iou_th)
-    return locerr_1, locerr_5, gt_known_locerr[0], top_maps, top5_boxes, top1_wrong_detail, gt_known_wrong_detail, gt_known_box, gt_known_map
+    return locerr_1, locerr_5, gt_known_locerr[
+        0], top_maps, top5_boxes, top1_wrong_detail, gt_known_wrong_detail, gt_known_box, gt_known_map
 
 
 def eval_loc_scg_v2(cls_logits, top_cams, gt_known_cams, aff_maps, img_path, label, gt_boxes,
@@ -280,19 +283,18 @@ def eval_loc_all(args, loc_params):
         else:
             sc_maps = sc_maps_so
 
-        # SCGv1 algorithm
-        # locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
-        #     eval_loc_scg(cls_logits, top_maps, gt_known_maps, sc_maps[-1] + sc_maps[-2], img_path[0], label_in,
-        #                  gt_boxes[idx], topk=(1, 5), threshold=th, mode='union',
-        #                  fg_th=args.scg_fg_th, bg_th=args.scg_bg_th, iou_th=args.iou_th,
-        #                  sc_maps_fo=None)
-
-        # SCGv2 algorithm: top_maps_scg 与原始图像相同尺寸
-        locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
-            eval_loc_scg_v2(cls_logits, top_maps, gt_known_maps, sc_maps[-2] + sc_maps[-1], img_path[0],
-                            label_in, gt_boxes[idx], topk=(1, 5), threshold=th, mode='union',
-                            iou_th=args.iou_th,
-                            sc_maps_fo=None)
+        if args.scg_version == 'v1':
+            locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
+                eval_loc_scg(cls_logits, top_maps, gt_known_maps, sc_maps[-1] + sc_maps[-2], img_path[0], label_in,
+                             gt_boxes[idx], topk=(1, 5), threshold=th, mode='union',
+                             fg_th=0.1, bg_th=0.05, iou_th=args.iou_th,
+                             sc_maps_fo=None)
+        if args.scg_version == 'v2':
+            locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
+                eval_loc_scg_v2(cls_logits, top_maps, gt_known_maps, sc_maps[-2] + sc_maps[-1], img_path[0],
+                                label_in, gt_boxes[idx], topk=(1, 5), threshold=th, mode='union',
+                                iou_th=args.iou_th,
+                                sc_maps_fo=None)
 
         # record SCG localization error
         loc_err['top1_locerr_scg_{}'.format(th)].update(locerr_1_scg, input_loc_img.size()[0])
@@ -304,8 +306,7 @@ def eval_loc_all(args, loc_params):
                 cls_wrong_scg + multi_instances_scg + region_part_scg + region_more_scg + region_wrong_scg)
         loc_err['top1_locerr_scg_right_{}'.format(th)].update(right_scg, input_loc_img.size()[0])
         loc_err['top1_locerr_scg_cls_wrong_{}'.format(th)].update(cls_wrong_scg, input_loc_img.size()[0])
-        loc_err['top1_locerr_scg_mins_wrong_{}'.format(th)].update(multi_instances_scg,
-                                                                   input_loc_img.size()[0])
+        loc_err['top1_locerr_scg_mins_wrong_{}'.format(th)].update(multi_instances_scg, input_loc_img.size()[0])
         loc_err['top1_locerr_scg_part_wrong_{}'.format(th)].update(region_part_scg, input_loc_img.size()[0])
         loc_err['top1_locerr_scg_more_wrong_{}'.format(th)].update(region_more_scg, input_loc_img.size()[0])
         loc_err['top1_locerr_scg_other_{}'.format(th)].update(region_wrong_scg, input_loc_img.size()[0])
@@ -361,39 +362,34 @@ def eval_loc_all(args, loc_params):
                                     gt_label=label_in.data.long().numpy(),
                                     gt_box=gt_boxes[idx], epoch=args.current_epoch, threshold=th, suffix='cam_hg')
             # SCGv1 algorithm
-            # locerr_1_scg_hg, locerr_5_scg_hg, gt_known_locerr_scg_hg, top_maps_scg_hg, top5_boxes_scg_hg, top1_wrong_detail_scg_hg = \
-            #     eval_loc_scg(hg_norm_logits, top_maps_hg, gt_known_maps_hg, sc_maps[-1] + sc_maps[-2], img_path[0], label_in,
-            #                  gt_boxes[idx], topk=(1, 5), threshold=th, mode='union',
-            #                  fg_th=args.scg_fg_th, bg_th=args.scg_bg_th, iou_th=args.iou_th,
-            #                  sc_maps_fo=None)
-
+            if args.scg_version == 'v1':
+                locerr_1_scg_hg, locerr_5_scg_hg, gt_known_locerr_scg_hg, top_maps_scg_hg, top5_boxes_scg_hg, top1_wrong_detail_scg_hg = \
+                    eval_loc_scg(hg_norm_logits, top_maps_hg, gt_known_maps_hg, sc_maps[-1] + sc_maps[-2], img_path[0], label_in,
+                                 gt_boxes[idx], topk=(1, 5), threshold=th, mode='union',
+                                 fg_th=args.scg_fg_th, bg_th=args.scg_bg_th, iou_th=args.iou_th,
+                                 sc_maps_fo=None)
             # SCGv2 algorithm: top_maps_scg 与原始图像相同尺寸
-            locerr_1_scg_hg, locerr_5_scg_hg, gt_known_locerr_scg_hg, top_maps_scg_hg, top5_boxes_scg_hg, top1_wrong_detail_scg_hg = \
-                eval_loc_scg_v2(hg_norm_logits, top_maps_hg, gt_known_maps_hg, sc_maps[-2] + sc_maps[-1],
-                                img_path[0],
-                                label_in, gt_boxes[idx], topk=(1, 5), threshold=th, mode='union',
-                                iou_th=args.iou_th, sc_maps_fo=None)
+            if args.scg_version == 'v2':
+                locerr_1_scg_hg, locerr_5_scg_hg, gt_known_locerr_scg_hg, top_maps_scg_hg, top5_boxes_scg_hg, top1_wrong_detail_scg_hg = \
+                    eval_loc_scg_v2(hg_norm_logits, top_maps_hg, gt_known_maps_hg, sc_maps[-2] + sc_maps[-1],
+                                    img_path[0],
+                                    label_in, gt_boxes[idx], topk=(1, 5), threshold=th, mode='union',
+                                    iou_th=args.iou_th, sc_maps_fo=None)
 
             # record SCG localization error
             loc_err['top1_locerr_scg_hinge_{}'.format(th)].update(locerr_1_scg_hg, input_loc_img.size()[0])
             loc_err['top5_locerr_scg_hinge_{}'.format(th)].update(locerr_5_scg_hg, input_loc_img.size()[0])
-            loc_err['gt_known_locerr_scg_hinge_{}'.format(th)].update(gt_known_locerr_scg_hg,
-                                                                      input_loc_img.size()[0])
+            loc_err['gt_known_locerr_scg_hinge_{}'.format(th)].update(gt_known_locerr_scg_hg, input_loc_img.size()[0])
             cls_wrong_scg_hg, multi_instances_scg_hg, region_part_scg_hg, region_more_scg_hg, region_wrong_scg_hg = \
                 top1_wrong_detail_scg_hg
             right_scg_hg = 1 - (
                     cls_wrong_scg_hg + multi_instances_scg_hg + region_part_scg_hg + region_more_scg_hg + region_wrong_scg_hg)
             loc_err['top1_locerr_scg_right_hinge_{}'.format(th)].update(right_scg_hg, input_loc_img.size()[0])
-            loc_err['top1_locerr_scg_cls_wrong_hinge_{}'.format(th)].update(cls_wrong_scg_hg,
-                                                                            input_loc_img.size()[0])
-            loc_err['top1_locerr_scg_mins_wrong_hinge_{}'.format(th)].update(multi_instances_scg_hg,
-                                                                             input_loc_img.size()[0])
-            loc_err['top1_locerr_scg_part_wrong_hinge_{}'.format(th)].update(region_part_scg_hg,
-                                                                             input_loc_img.size()[0])
-            loc_err['top1_locerr_scg_more_wrong_hinge_{}'.format(th)].update(region_more_scg_hg,
-                                                                             input_loc_img.size()[0])
-            loc_err['top1_locerr_scg_other_hinge_{}'.format(th)].update(region_wrong_scg_hg,
-                                                                        input_loc_img.size()[0])
+            loc_err['top1_locerr_scg_cls_wrong_hinge_{}'.format(th)].update(cls_wrong_scg_hg, input_loc_img.size()[0])
+            loc_err['top1_locerr_scg_mins_wrong_hinge_{}'.format(th)].update(multi_instances_scg_hg, input_loc_img.size()[0])
+            loc_err['top1_locerr_scg_part_wrong_hinge_{}'.format(th)].update(region_part_scg_hg, input_loc_img.size()[0])
+            loc_err['top1_locerr_scg_more_wrong_hinge_{}'.format(th)].update(region_more_scg_hg, input_loc_img.size()[0])
+            loc_err['top1_locerr_scg_other_hinge_{}'.format(th)].update(region_wrong_scg_hg, input_loc_img.size()[0])
 
             # Visualization
             if args.debug and idx in show_idxs and (th == args.threshold[1]):
@@ -445,7 +441,8 @@ def eval_loc_all(args, loc_params):
                     region_part_sos,
                     region_more_sos,
                     region_wrong_sos)
-                debug_dir = os.path.join(args.debug_dir, top1_wrong_detail_dir_sos) if args.debug_detail else args.debug_dir
+                debug_dir = os.path.join(args.debug_dir,
+                                         top1_wrong_detail_dir_sos) if args.debug_detail else args.debug_dir
                 save_im_heatmap_box(img_path[0], top_sos_maps, top5_sos_boxes, debug_dir,
                                     gt_label=label_in.data.long().numpy(), gt_box=gt_boxes[idx],
                                     epoch=args.current_epoch, threshold=th, suffix='sos')
@@ -485,11 +482,16 @@ def print_fun(args, print_params):
             print('CAM-Hinge-Top1: {:.2f} Top5: {:.2f}\n'.format(loc_err['top1_locerr_hinge_{}'.format(th)].avg,
                                                                  loc_err['top5_locerr_hinge_{}'.format(th)].avg))
             print('CAM-Hinge-Top1_err: {} {} {} {} {} {}\n'.format(loc_err['top1_locerr_right_hinge_{}'.format(th)].sum,
-                                                                   loc_err['top1_locerr_cls_wrong_hinge_{}'.format(th)].sum,
-                                                                   loc_err['top1_locerr_mins_wrong_hinge_{}'.format(th)].sum,
-                                                                   loc_err['top1_locerr_part_wrong_hinge_{}'.format(th)].sum,
-                                                                   loc_err['top1_locerr_more_wrong_hinge_{}'.format(th)].sum,
-                                                                   loc_err['top1_locerr_other_hinge_{}'.format(th)].sum))
+                                                                   loc_err[
+                                                                       'top1_locerr_cls_wrong_hinge_{}'.format(th)].sum,
+                                                                   loc_err['top1_locerr_mins_wrong_hinge_{}'.format(
+                                                                       th)].sum,
+                                                                   loc_err['top1_locerr_part_wrong_hinge_{}'.format(
+                                                                       th)].sum,
+                                                                   loc_err['top1_locerr_more_wrong_hinge_{}'.format(
+                                                                       th)].sum,
+                                                                   loc_err[
+                                                                       'top1_locerr_other_hinge_{}'.format(th)].sum))
             print('SCG-Hinge-Top1: {:.2f} Top5: {:.2f}\n'.format(loc_err['top1_locerr_scg_hinge_{}'.format(th)].avg,
                                                                  loc_err['top5_locerr_scg_hinge_{}'.format(th)].avg))
             print('SCG-Hinge-Top1_err: {} {} {} {} {} {}\n'.format(
