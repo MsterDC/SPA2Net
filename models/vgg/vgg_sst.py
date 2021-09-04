@@ -320,12 +320,21 @@ class VGG(nn.Module):
         return loss, ra_loss, sos_loss, hinge_loss
 
     def _forward_spa(self, train_flag, feat):
-        C1_2, C3, C4, feat_5 = feat
+        f12, f3, f4, f5 = feat
         sc_fo, sc_so = None, None
-        cls_map = self.cls(feat_5)
+        cls_map = self.cls(f5)
         if not train_flag:
             sc_fo, sc_so = self.cal_sc(feat)
         return cls_map, sc_fo, sc_so  # 训练时sc_fo和sc_so=None
+
+    def _forward_spa_hinge(self, train_flag, feat):
+        C1_2, C3, C4, feat_5 = feat
+        sc_fo, sc_so = None, None
+        cls_map = self.cls(feat_5)
+        hg_map = self.hinge(feat_5)
+        if not train_flag:
+            sc_fo, sc_so = self.cal_sc(feat)
+        return cls_map, hg_map, sc_fo, sc_so
 
     def cal_sc(self, feat):
         F1_2, F3, F4, F5 = feat
@@ -394,9 +403,15 @@ class VGG(nn.Module):
         cls_map = self.cls(cls_in)
         return cls_map, sc_fo, sc_so
 
-    def _forward_sos_sa(self, train_flag, current_epoch, feat):
+    def _forward_sos_sa_v1(self, train_flag, current_epoch, feat):
         """
-        move sa module to sos branch
+        sa module at cls branch.
+        """
+        pass
+
+    def _forward_sos_sa_v2(self, train_flag, current_epoch, feat):
+        """
+        sa module at sos branch.
         """
         f12, f3, f4, f5 = feat
         cls_map = self.cls(f5)
@@ -436,6 +451,51 @@ class VGG(nn.Module):
                 sos_map = sos_map.squeeze()
         return cls_map, sos_map, sc_fo, sc_so
 
+    def _forward_sos_sa_v3(self, train_flag, current_epoch, feat):
+        """
+        sa module at main branch.
+        """
+        sc_fo, sc_so = self.cal_sc(feat)
+        f12, f3, f4, f5 = feat
+        sos_map = None
+        batch, channel, _, _ = f5.shape
+        if train_flag:  # train
+            if self.args.sa_start <= current_epoch:
+                edge_code = None
+                if self.args.sa_use_edge == 'True':
+                    edge_code = self.cal_edge((f4, f5))
+                sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
+                sa_out = self.sa(sa_in, sa_in, sa_in, edge_code)
+                cls_map = self.cls(sa_out)
+                if self.args.sos_start <= current_epoch:
+                    if 'mc_sos' in self.args.mode:
+                        sos_map = self.mc_sos(sa_out)
+                    else:
+                        sos_map = self.sos(sa_out)
+                        sos_map = sos_map.squeeze()
+            else:
+                cls_map = self.cls(f5)
+                if self.args.sos_start <= current_epoch:
+                    if 'mc_sos' in self.args.mode:
+                        sos_map = self.mc_sos(f5)
+                    else:
+                        sos_map = self.sos(f5)
+                        sos_map = sos_map.squeeze()
+        else:  # test
+            edge_code = None
+            if self.args.sa_use_edge == 'True':
+                edge_code = self.cal_edge((f4, f5))
+            sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
+            sa_out = self.sa(sa_in, sa_in, sa_in, edge_code)
+            cls_map = self.cls(sa_out)
+            if 'mc_sos' in self.args.mode:
+                sos_map = self.mc_sos(sa_out)
+                sos_map = sos_map.squeeze()
+            else:
+                sos_map = self.sos(sa_out)
+                sos_map = sos_map.squeeze()
+        return cls_map, sos_map, sc_fo, sc_so
+
     def _forward_mc_sos(self, train_flag, current_epoch, feat):
         C1_2, C3, C4, feat_5 = feat
         cls_map = self.cls(feat_5)
@@ -464,42 +524,6 @@ class VGG(nn.Module):
             sos_map = self.sos(feat_5)
             sos_map = sos_map.squeeze()  # squeeze batch_channel
         return cls_map, sos_map, sc_fo, sc_so
-
-    # def _forward_sos_sa(self, train_flag, current_epoch, feat):
-    #     C1_2, C3, C4, feat_5 = feat
-    #     batch, channel, _, _ = feat_5.shape
-    #     sc_fo, sc_so = self.cal_sc(feat)
-    #     sos_map = None
-    #     if train_flag:
-    #         if self.args.sos_start <= current_epoch:
-    #             sos_map = self.sos(feat_5)
-    #             sos_map = sos_map.squeeze()
-    #         if self.args.sa_start <= current_epoch:
-    #             edge_code = None
-    #             if self.args.sa_use_edge == 'True':
-    #                 edge_code = self.cal_edge((C4, feat_5))
-    #             sa_in = feat_5.view(batch, channel, -1).permute(0, 2, 1)
-    #             cls_in = self.sa(sa_in, sa_in, sa_in, edge_code)
-    #         else:
-    #             cls_in = feat_5
-    #     else:
-    #         sos_map = self.sos(feat_5)
-    #         edge_code = None
-    #         if self.args.sa_use_edge == 'True':
-    #             edge_code = self.cal_edge((C4, feat_5))
-    #         sa_in = feat_5.view(batch, channel, -1).permute(0, 2, 1)
-    #         cls_in = self.sa(sa_in, sa_in, sa_in, edge_code)
-    #     cls_map = self.cls(cls_in)
-    #     return cls_map, sos_map, sc_fo, sc_so
-
-    def _forward_spa_hinge(self, train_flag, feat):
-        C1_2, C3, C4, feat_5 = feat
-        sc_fo, sc_so = None, None
-        cls_map = self.cls(feat_5)
-        hg_map = self.hinge(feat_5)
-        if not train_flag:
-            sc_fo, sc_so = self.cal_sc(feat)
-        return cls_map, hg_map, sc_fo, sc_so
 
     # def _forward_rcst(self, train_flag, current_epoch, feat):
     #     """
@@ -549,6 +573,7 @@ class VGG(nn.Module):
     #         sos_map = self.sos(feat_5)
     #         sos_map = sos_map.squeeze()
     #     return cls_map, sos_map, sc_fo, sc_so, rcst_map
+
     # def _forward_rcst_sa(self, train_flag, current_epoch, feat):
     #     C1_2, C3, C4, feat_5 = feat
     #     sc_fo, sc_so, rcst_map = None, None, None
@@ -602,8 +627,12 @@ class VGG(nn.Module):
             return self._forward_spa_sa(train_flag, cur_epoch, ft_1_5)
         if self.args.mode == 'sos':
             return self._forward_sos(train_flag, cur_epoch, ft_1_5)
-        if self.args.mode == 'sos+sa' or self.args.mode == 'mc_sos+sa':
-            return self._forward_sos_sa(train_flag, cur_epoch, ft_1_5)
+        if 'sos+sa_v1' in self.args.mode:
+            return self._forward_sos_sa_v1(train_flag, cur_epoch, ft_1_5)
+        if 'sos+sa_v2' in self.args.mode:
+            return self._forward_sos_sa_v2(train_flag, cur_epoch, ft_1_5)
+        if 'sos+sa_v3' in self.args.mode:
+            return self._forward_sos_sa_v3(train_flag, cur_epoch, ft_1_5)
         if self.args.mode == 'mc_sos':
             return self._forward_mc_sos(train_flag, cur_epoch, ft_1_5)
         # if self.args.mode == 'rcst':
