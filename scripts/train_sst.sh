@@ -35,27 +35,27 @@ python train_sst.py \
     --hinge_m=1 \
     --hinge_lr=0.00005 \
     --hinge_loss_weight=1 \
-    --snapshot_dir=../snapshots/vgg16_sos_#11 \
-    --log_dir=../log/vgg16_sos_#11 \
+    --snapshot_dir=../snapshots/vgg16_spa_baseline_#2 \
+    --log_dir=../log/vgg16_spa_baseline_#2 \
     --batch_size=64 \
-    --gpus=0,1,2,3 \
+    --gpus=1,2,3 \
     --lr=0.001 \
     --sos_lr=0.00005 \
     --sos_gt_seg=True \
     --sos_seg_method=TC \
     --sos_loss_method=BCE \
-    --sos_fg_th=0.3 \
-    --sos_bg_th=0.1 \
+    --sos_fg_th=0.4 \
+    --sos_bg_th=0.2 \
     --sos_loss_weight=0.5 \
     --sos_start=0 \
-    --sa_lr=0.001 \
+    --sa_lr=0.005 \
     --sa_use_edge=True \
     --sa_edge_stage=4,5 \
     --sa_start=20 \
-    --sa_head=4 \
+    --sa_head=8 \
     --sa_neu_num=512 \
     --watch_cam \
-    --mode=sos \
+    --mode=spa \
 
 #    --rcst_lr=0.000005 \
 #    --rcst_signal=ori \

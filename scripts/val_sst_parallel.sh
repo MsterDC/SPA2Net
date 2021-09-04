@@ -25,23 +25,27 @@ function ChkQue {
     done
 }
 
-
 list_prefix="../data/CUB_200_2011/list/split/test_"
 box_prefix="../data/CUB_200_2011/list/split/test_boxes_"
-debug_prefix="../debug/vgg16_"
-task_name="_id_"
-suffix=".txt"
+debug_prefix="../debug/"
+debug_suffix="_t1/id_t1-"
+snap_prefix="../snapshots/"
+task_name="vgg16_sos+sa_v3_#1"
+file_suffix=".txt"
+gpu_num=4
+snapshots=$snap_prefix$task_name
 
 Njob=19
 Nproc=20
 
 for ((i = 0; i<=$Njob; i++)); do
-    test_list=$list_prefix$i$suffix
-    box_list=$box_prefix$i$suffix
-    debug=$debug_prefix$task_name$i
-    gpuid=$(( $i%4 ))
+    test_list=$list_prefix$i$file_suffix
+    box_list=$box_prefix$i$file_suffix
+    debug=$debug_prefix$task_name$debug_suffix$i
+    gpuid=$(( $i%$gpu_num ))
     echo ${test_list}
     echo ${box_list}
+    echo ${snapshots}
     echo ${debug}
     python val_sst.py \
         --arch=vgg_sst \
@@ -57,14 +61,15 @@ for ((i = 0; i<=$Njob; i++)); do
         --scg_fosc_th=0.2 \
         --scg_sosc_th=1 \
         --scg_so_weight=1 \
-        --scg_order=2
+        --scg_order=2 \
         --restore_from=cub_epoch_100.pth.tar \
-        --snapshot_dir=../snapshots/vgg_16_masked \
+        --snapshot_dir=$snapshots \
         --debug_dir=$debug \
+        --scg_version=v2 \
         --gpus=$gpuid \
-        --threshold=0.1,0.15,0.2,0.25,0.3,0.35 \
-        --sos_seg_method=BC \
-        --sos_loss_method=MSE \
+        --threshold=0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5 \
+        --sos_seg_method=TC \
+        --sos_loss_method=BCE \
         --sa_use_edge=True \
         --sa_edge_stage=4,5 \
         --sa_head=4 \

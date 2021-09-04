@@ -18,17 +18,18 @@ python val_sst.py \
     --scg_so_weight=1 \
     --scg_order=2 \
     --restore_from=cub_epoch_100.pth.tar \
-    --snapshot_dir=../snapshots/vgg16_sos+sa_v2_#3 \
-    --debug_dir=../debug/vgg16_sos+sa_v2_#3_t1 \
-    --gpus=0 \
+    --use_tap=False \
+    --tap_th=0.1 \
+    --snapshot_dir=../snapshots/vgg16_sos+sa_v3_#14 \
+    --debug_dir=../debug/vgg16_sos+sa_v3_#14_t1 \
     --threshold=0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5 \
-    --sos_seg_method=BC \
+    --gpus=0 \
+    --scg_version=v2 \
+    --sos_seg_method=TC \
     --sos_loss_method=BCE \
     --sa_use_edge=True \
     --sa_edge_stage=4,5 \
-    --sa_head=4 \
+    --sa_head=8 \
     --sa_neu_num=512 \
-    --use_tap=False \
-    --tap_th=0.1 \
-    --mode=sos+sa \
+    --mode=sos+sa_v3 \
     --debug \

@@ -20,6 +20,7 @@ python val_sst.py \
     --scg_order=2 \
     --snapshot_dir=../snapshots/ilsvrc/vgg16_mc_sos_#1 \
     --debug_dir=../debug/ilsvrc/vgg16_mc_sos_#1_t2 \
+    --scg_version=v2 \
     --gpus=0 \
     --threshold=0.3,0.35,0.4,0.45,0.5,0.55,0.6 \
     --sos_seg_method=BC \
