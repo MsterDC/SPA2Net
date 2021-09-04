@@ -43,7 +43,6 @@ def val(args):
 
     print('Running parameters:\n')
     print(json.dumps(vars(args), indent=4, separators=(',', ':')))
-
     if not os.path.exists(args.snapshot_dir):
         os.mkdir(args.snapshot_dir)
 
@@ -98,7 +97,7 @@ def val(args):
                 logits, _, _ = model(input_cls_img, train_flag=False)
             if args.mode == 'sos':
                 logits, _, _, _ = model(input_cls_img, train_flag=False)
-            if args.mode == 'sos+sa' or args.mode == 'mc_sos+sa':
+            if 'sos+sa' in args.mode:
                 logits, _, _, _ = model(input_cls_img, train_flag=False)
             if args.mode == 'spa+hinge':
                 logits, hg_logits, _, _ = model(input_cls_img, train_flag=False)
@@ -149,7 +148,7 @@ def val(args):
                 logits, sc_maps_fo, sc_maps_so = model(input_loc_img, train_flag=False)
             if args.mode == 'sos':
                 logits, pred_sos, sc_maps_fo, sc_maps_so = model(input_loc_img, train_flag=False)
-            if args.mode == 'sos+sa' or args.mode == 'mc_sos+sa':
+            if 'sos+sa' in args.mode:
                 logits, pred_sos, sc_maps_fo, sc_maps_so = model(input_loc_img, train_flag=False)
             if args.mode == 'spa+hinge':
                 logits, hg_logits, sc_maps_fo, sc_maps_so = model(input_loc_img, train_flag=False)
@@ -187,7 +186,7 @@ def val(args):
         print_params.update({'top1_clsacc_hg': top1_clsacc_hg, 'top5_clsacc_hg': top5_clsacc_hg})
     print_fun(args, print_params)
 
-    # record results with .txt file
+    # record results
     setting = args.debug_dir.split('/')[-1]
     results_log_name = '{}_results.log'.format(setting)
     result_log = os.path.join(args.snapshot_dir, results_log_name)
