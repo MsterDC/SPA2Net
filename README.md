@@ -20,7 +20,7 @@ bash ./val_sst.sh
 
 
 ### [Other]
-* To execute 'spa' or 'spa+sa' with older code:
+#### To execute 'spa' or 'spa+sa' with older code:
 
 ```shell
 bash ./scripts/train_spa.sh
