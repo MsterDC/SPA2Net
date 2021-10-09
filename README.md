@@ -2,7 +2,12 @@
 PyTorch implementation for Self-Supervised Attention (SSA).
 
 ## :gear: Quick Start: Train & Test
-#### Switch to the `scripts` directory and execute the following shell code:
+
+### Download fine-tuned classification model
+* [BaiduNetdisk](https://pan.baidu.com/s/1-bsNxmqaheHW72umm408uA) code：6ih2 
+* [GoogleDrive](https://drive.google.com/file/d/1BXrgBA09eGZ3UvtFJYYm3FfPDScKA5-g/view?usp=sharing)
+
+### Switch to the `scripts` directory and execute the following shell code:
 
 :fire: For training
 ```shell
