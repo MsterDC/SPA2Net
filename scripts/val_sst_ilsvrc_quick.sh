@@ -2,7 +2,7 @@
 
 cd ../exper/
 
-python val_sst.py \
+python val_sst_quick.py \
     --arch=vgg_sst \
     --dataset=ilsvrc \
     --img_dir=../data/ILSVRC/img_val \
@@ -17,9 +17,10 @@ python val_sst.py \
     --scg_blocks=4,5 \
     --scg_so_weight=1 \
     --scg_order=2 \
-    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_wp_#10 \
-    --debug_dir=../debug/ilsvrc/vgg16_sos+sa_v3_wp_#10_t1 \
-    --restore_from=ilsvrc_epoch_20.pth.tar \
+    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_wp_#3 \
+    --debug_dir=../debug/ilsvrc/vgg16_sos+sa_v3_wp_#3_ttt \
+    --batch_size=20 \
+    --restore_from=ilsvrc_epoch_15.pth.tar \
     --scg_version=v2 \
     --scg_fosc_th=0.2 \
     --scg_sosc_th=1 \
@@ -33,4 +34,4 @@ python val_sst.py \
     --sa_head=8 \
     --sa_neu_num=512 \
     --mode=sos+sa_v3 \
-    --debug \
+#    --debug \
