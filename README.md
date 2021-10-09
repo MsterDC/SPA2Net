@@ -60,7 +60,7 @@ Before executing the script `each time`, you may need to confirm `all` the param
 You need to double-check each time when you run it to ensure that all parameters are correctly configured.
 * The parameters **before** the `20th line` are the default settings, you do not need to change them.
 
-#### :mag: For a more detailed explanation of each parameter, please refer to the [`CONFIG.md`](CONFIG.md) in the scripts directory.
+#### :mag: For a more detailed explanation of each parameter, please refer to the [`CONFIG.md`](CONFIG.md).
 
 ***
 
