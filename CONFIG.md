@@ -28,7 +28,7 @@ This document contains detailed configuration for parameters using in training a
 * --sa_lr: learning rate of self-attention module, defalut is `0.005` on CUB, `0.001` on ILSVRC.
 * --sa_use_edge: using edge-encoding or not, 'True' or 'False', default is 'True'.
 * --sa_edge_weight: weight of edge-encoding when add with attention weight. Default is 1.
-* --sa_edge_stage: specifing the features from certain stages to calculate edge-encoding.
+* --sa_edge_stage: specifing the features from certain stages to calculate edge-encoding. Default is '4,5'.
 * --sa_start: epoch to add SA module for training, default is 20 on CUB, 3 on ILSVRC.
 * --sa_head: the number of multi-heads of SA module, default is 8.
 * --sa_neu_num: channel number of SA module. Default is 512 in VGG16.
@@ -59,3 +59,14 @@ where 'other' refers to the parameters of the `backbone` (such as vgg16) ,'cls' 
 'sos' refers to the parameters of `sos_head`, and 'sa' refers to the parameters of the `self-attention` module.
 
 ## :deciduous_tree: Test
+* --debug_dir: a suffix is usually added to the test directory: `_#t1` to distinguish different test results of the same model, such as `../debug/ilsvrc/vgg16_sos+sa_v3_wp_#3_t1` ,  `../debug/ilsvrc/vgg16_sos+sa_v3_wp_#3_t2` , etc.
+* --scg_version: specify the version of SCG algorithm, '`v2`' is the default setting.
+* --sos_seg_method: need to align with the settings during training, default is '`TC`'.
+* --sos_loss_method: need to align with the settings during training, default is '`BCE`'.
+* --sa_use_edge: using edge-encoding or not, default is '`True`'.
+* --sa_edge_weight: need to align with the settings during training, default is `1`.
+* --sa_edge_stage: need to align with the settings during training, default is '`4,5`'.
+* --sa_head: need to align with the settings during training, default is `8`.
+* --sa_neu_num: need to align with the settings during training, default is `512` for VGG16.
+* --mode: need to align with the settings during training, default is `sos+sa_v3`.
+* --debug: it is not support now, it will be fixed in the future.
