@@ -24,12 +24,12 @@ python train_sst.py \
     --scg_so_weight=1 \
     --scg_order=2 \
     --scg_blocks=4,5 \
-    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_wp_#13 \
-    --log_dir=../log/ilsvrc/vgg16_sos+sa_v3_wp_#13 \
+    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_wp_#14 \
+    --log_dir=../log/ilsvrc/vgg16_sos+sa_v3_wp_#14 \
     --lr=0 \
     --warmup=True \
     --epoch=15 \
-    --decay_point=12,14 \
+    --decay_point=11,13 \
     --weight_decay=0.0005 \
     --batch_size=64 \
     --gpus=0,1,2,3 \
@@ -38,7 +38,7 @@ python train_sst.py \
     --pretrained_model_dir=../snapshots/ilsvrc/vgg16_spa_#1 \
     --resume=False \
     --restore_from=none \
-    --ra_loss_weight=0.5 \
+    --ra_loss_weight=1 \
     --ram_start=3 \
     --ram_th_bg=0.1 \
     --ram_bg_fg_gap=0.2 \
