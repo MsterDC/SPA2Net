@@ -67,28 +67,45 @@ You need to double-check each time when you run it to ensure that all parameters
 
 ## :art: [All Archictures]
 ### :heavy_check_mark: SOS+SA v3 is the final version (At the end).
-* SPA (Baseline)
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SPA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
 
-* SPA+SA
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SPA%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
+<div align="center">
+  <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SPA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" />
+  <p>SPA (Baseline)</p>
+</div>
 
-* SPA+Hinge
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SPA%2BHinge%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
 
-* SOS
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SOS%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
+<div align="center">
+  <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SPA%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" />
+  <p>SPA+SA</p>
+</div>
 
-* Multi-channel SOS
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/Multi-Channel%20SOS%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
+<div align="center">
+  <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SPA%2BHinge%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" />
+  <p>SPA+Hinge</p>
+</div>
 
-* SOS+SA v1
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SOS%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84_1.png" width="633" >
+<div align="center">
+  <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SOS%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" />
+  <p>SOS</p>
+</div>
 
-* SOS+SA v2
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SOS%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84_2.png" width="633" >
+<div align="center">
+  <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/Multi-Channel%20SOS%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" />
+  <p>Multi-channel SOS</p>
+</div>
 
-* :heavy_check_mark: SOS+SA v3 (Final Version)
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SOS%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84_3.png" width="633" >
+<div align="center">
+  <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SOS%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84_1.png" width="633" />
+  <p>SOS+SA v1</p>
+</div>
 
+<div align="center">
+  <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SOS%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84_2.png" width="633" />
+  <p>SOS+SA v2</p>
+</div>
+
+<div align="center">
+  <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SOS%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84_3.png" width="633" />
+  <p>SOS+SA v3 (Final Version)</p>
+</div>
 
