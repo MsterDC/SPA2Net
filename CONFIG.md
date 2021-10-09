@@ -9,8 +9,8 @@ This document contains detailed configuration for parameters using in training a
 * --warmup: using warmup strategy or not, 'True' or 'False'. (See the end for more details)
 * --weight_decay: SGD optimizer used, default is `0.0005`.
 * --load_finetune: 'True' or 'False' for loading fine-tuned classification model(includes cls_head) on ILSVRC. (To solve the problem of square activation)
-* --pretrained_model: fine-tuned model name, default is 'ilsvrc_epoch_20.pth.tar'
-* --pretrained_model_dir: fine_tuned model path, default is '../snapshots/ilsvrc/vgg16_spa_#1'
+* --pretrained_model: fine-tuned model name, default is '`ilsvrc_epoch_20.pth.tar`'. [Here](https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/README.md) provide the fine-tuned model of VGG16.
+* --pretrained_model_dir: fine_tuned model path, default is '`../snapshots/ilsvrc/vgg16_spa_#1`'
 * --resume: resume training from checkpoint or not, 'False' or 'True', default is '`False`'.
 * --restore_from: default is '`none`', or need to specify the path of checkpoint.
 * --ram_th_bg : when using `SCGv2` in SPA on ILSVRC, `0.1` is better, but `0.4` is **better** for `SCGv1` on ILSVRC. 
