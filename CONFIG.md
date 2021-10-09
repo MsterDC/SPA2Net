@@ -69,4 +69,4 @@ where 'other' refers to the parameters of the `backbone` (such as vgg16) ,'cls' 
 * --sa_head: need to align with the settings during training, default is `8`.
 * --sa_neu_num: need to align with the settings during training, default is `512` for VGG16.
 * --mode: need to align with the settings during training, default is `sos+sa_v3`.
-* --debug: it is not supported for currently, it will be fixed later.
+* --debug: it is not supported for quick version script now, it will be fixed later.
