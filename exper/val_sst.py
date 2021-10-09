@@ -43,15 +43,19 @@ def val(args):
 
     print('Running parameters:\n')
     print(json.dumps(vars(args), indent=4, separators=(',', ':')))
+
     if not os.path.exists(args.snapshot_dir):
         os.mkdir(args.snapshot_dir)
 
+    # test parameters recording
     test_record_name = args.debug_dir.split('/')[-1].split('_')[-1] + '.txt'
     with open(os.path.join(args.snapshot_dir, test_record_name), 'a') as fw:
         config = json.dumps(vars(args), indent=4, separators=(',', ':'))
         fw.write(config)
 
+    # get gt bbox and corresponding image path
     gt_boxes, img_name = init_dataset(args)
+    # meters initial
     params_meters, loc_err = init_meters(args)
 
     top1_clsacc, top5_clsacc = params_meters.get('top1_clsacc'), params_meters.get('top5_clsacc')
@@ -75,7 +79,6 @@ def val(args):
         show_idxs = show_idxs[:]
 
     for idx, dat_test in tqdm(enumerate(test_loader)):
-        # 读取用于分类的测试数据
         img_path, img, label_in = dat_test
         img_cls, img_loc = img
         input_cls_img = img_cls
