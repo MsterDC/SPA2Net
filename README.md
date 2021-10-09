@@ -1,41 +1,66 @@
 # WGOL-TPAMI
-PyTorch implementation for SSA.
+PyTorch implementation for Self-Supervised Attention (SSA).
 
-## How to train or test with the code?
-#### Switch to the 'scripts' directory and execute:
+## :gear: How to Train or Test with this code?
+#### Switch to the `scripts` directory and execute the following shell code:
+
+:fire: For training
 ```shell
-bash ./train_sst.sh
+bash ./train_sst_cub.sh  # For CUB-200-2011
 ```
 ```shell
-bash ./val_sst.sh
+bash ./train_sst_ilsvrc.sh  # For ILSVRC
 ```
 
-
-
-### [Tips]
-* There is not dataset directory so you need to copy 'data' to current project after executing 'git clone' at first time.
-* Please use the parameter "mode" to control the method you want to train or test. ('mode' can be: spa / spa+sa / sos / mc_sos / sos+sa_v2 / sos+sa_v3 / mc_sos+sa_v2 / mc_sos+sa_v3 / spa+hinge)
-* When you assign a "mode", don't worry about other parameters that are not used in the current task, they will be ignored when the code is executed. So you don't need to delete them.
-*  Don’t forget to re-assign your current task-related parameters, such as 'sos_start' or 'sa_start', etc.
-
-
-### [Other]
-#### To execute 'spa' or 'spa+sa' with older code:
-
+:fire: For testing 
 ```shell
-bash ./scripts/train_spa.sh
+bash ./val_sst_cub.sh  # Serial version for CUB
 ```
 ```shell
-bash ./scripts/val_spa.sh
+bash ./val_sst_cub_parallel.sh  # Multi-threaded serial test version for CUB
+```
+```shell
+bash ./val_sst_cub_quick.sh  # Quick Version for CUB
+```
+```shell
+bash ./val_sst_ilsvrc.sh  # Serial version for ILSVRC
+```
+```shell
+bash ./val_sst_ilsvrc_quick.sh  # Quick Version for ILSVRC (Recommend)
 ```
 
-* You also need to pay attention to the parameters in the script which you want to asign.
+
+### :pushpin: [Tips]
+* There is not dataset directory so you need to create after executing `git clone`.
+* Please use the parameter `mode` (Type: String) to control the method you want to train or test. 
+* The currently supported `mode` include: `spa` / `spa+sa` / `sos` / `sos+sa_v1` / `sos+sa_v2` / `sos+sa_v3`(Default).
+* When you assign parameter `mode`, don't worry about other parameters that are not used in the current `mode`, because the irrelevant parameters will be blocked in the code. 
+
+
+### :pushpin: [Other]
+#### Don't forget to set other parameters related to the current `mode`, especially the settings of the following parameters:
+
+:wrench: For any **training** script in dict `scripts`:
+
+* Note the `line 27` of the two training scripts `train_sst_cub.sh` & `train_sst_ilsvrc.sh`.
+Before executing the script `each time`, you may need to confirm `all` the parameters `after line 27`. 
+* The parameters `before line 27` are the default settings, unless necessary, you **don't need** to change them.
+
+
+:wrench: For any **testing** script in dict `scripts`:
+
+* The script `val_sst_*_quick.sh` is used by `default` to test the model.
+* Take `val_sst_ilsvrc_quick.sh` as an example, you need to pay attention to the code on `line 20` and **after**. 
+You need to double-check each time when you run it to ensure that all parameters are correctly configured.
+* The parameters **before** the `20th line` are the default settings, you do not need to change them.
+
+#### :mag: For a more detailed explanation of each parameter, please refer to the [`Config.md`](Config.md) in the scripts directory.
 
 ***
 
-## [Network Architectures]
+## :art: [All Archictures]
 
-* SPA
+* SPA (Baseline)
 <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SPA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
 
 * SPA+SA
@@ -56,7 +81,7 @@ bash ./scripts/val_spa.sh
 * SOS+SA v2
 <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SOS%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84_2.png" width="633" >
 
-* SOS+SA v3
+* :heavy_check_mark: SOS+SA v3 (Final Version)
 <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SOS%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84_3.png" width="633" >
 
 
