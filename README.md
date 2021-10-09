@@ -36,27 +36,27 @@ bash ./scripts/val_spa.sh
 ## [Network Architectures]
 
 * SPA
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/SPA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
+<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SPA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
 
 * SPA+SA
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/SPA%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
+<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SPA%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
 
 * SPA+Hinge
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/SPA%2BHinge%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
+<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SPA%2BHinge%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
 
 * SOS
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/SOS%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
+<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SOS%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
 
 * Multi-channel SOS
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/Multi-Channel%20SOS%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
+<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/Multi-Channel%20SOS%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
 
 * SOS+SA v1
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/SOS%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84_1.png" width="633" >
+<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SOS%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84_1.png" width="633" >
 
 * SOS+SA v2
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/SOS%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84_2.png" width="633" >
+<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SOS%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84_2.png" width="633" >
 
 * SOS+SA v3
-<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/SOS%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84_3.png" width="633" >
+<img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SOS%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84_3.png" width="633" >
 
 
