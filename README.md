@@ -1,7 +1,7 @@
 # WGOL-TPAMI
 PyTorch implementation for Self-Supervised Attention (SSA).
 
-## :gear: How to Train or Test with this code?
+## :gear: Quick Start: Train & Test
 #### Switch to the `scripts` directory and execute the following shell code:
 
 :fire: For training
@@ -20,13 +20,13 @@ bash ./val_sst_cub.sh  # Serial version for CUB
 bash ./val_sst_cub_parallel.sh  # Multi-threaded serial test version for CUB
 ```
 ```shell
-bash ./val_sst_cub_quick.sh  # Quick Version for CUB
+bash ./val_sst_cub_quick.sh  # Quick Version for CUB (**Recommend**)
 ```
 ```shell
 bash ./val_sst_ilsvrc.sh  # Serial version for ILSVRC
 ```
 ```shell
-bash ./val_sst_ilsvrc_quick.sh  # Quick Version for ILSVRC (Recommend)
+bash ./val_sst_ilsvrc_quick.sh  # Quick Version for ILSVRC (**Recommend**)
 ```
 
 
@@ -59,7 +59,7 @@ You need to double-check each time when you run it to ensure that all parameters
 ***
 
 ## :art: [All Archictures]
-
+### :heavy_check_mark: SOS+SA v3 is the final version (At the end).
 * SPA (Baseline)
 <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SPA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84.png" width="633" >
 
