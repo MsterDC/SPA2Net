@@ -17,9 +17,9 @@ This document contains detailed configuration for parameters using in training a
 * --ram_bg_fg_gap: when using `SCGv2` in SPA on ILSVRC, `0.2` is better, but `0.1` is **better** for `SCGv1` on ILSVRC. 
 * --scg_fosc_th: when using `SCGv2` in SPA on ILSVRC, `0.2` is better, but `0.1` is **default setting** in paper for `SCGv1` on ILSVRC. 
 * --scg_sosc_th: when using `SCGv2` in SPA on ILSVRC, `1` is better, but `0.5` is **default setting** in paper for `SCGv1` on ILSVRC. 
-* --sos_lr: learning rate of sos_head, defalut is `5e-0.5`.
+* --sos_lr: learning rate of `sos_head`, defalut is `5e-05`.
 * --sos_gt_seg: using segmentation or not when generate pasedo ground-truth for predicting `sos_map`. 'True' or 'False', default is '`True`'.
-* --sos_seg_method: when setting `sos_gt_seg=True` , sos_gt_seg specify the segmetation method, 
+* --sos_seg_method: when setting `sos_gt_seg=True` , `sos_gt_seg` specify the segmetation method, 
 'TC' and 'BC' is supported for double-thresholding and single-thresholding, respectively. Default is '`TC`'.
 * --sos_loss_method: loss function for SOS branch, BCE loss function and MSE loss function are supported, default is '`BCE`'.
 * --sos_fg_th: foreground segmentation threshold, default is `0.2` on CUB, it is not clear the value on ILSVRC.
@@ -69,4 +69,4 @@ where 'other' refers to the parameters of the `backbone` (such as vgg16) ,'cls' 
 * --sa_head: need to align with the settings during training, default is `8`.
 * --sa_neu_num: need to align with the settings during training, default is `512` for VGG16.
 * --mode: need to align with the settings during training, default is `sos+sa_v3`.
-* --debug: it is not support now, it will be fixed in the future.
+* --debug: it is not supported for currently, it will be fixed later.
