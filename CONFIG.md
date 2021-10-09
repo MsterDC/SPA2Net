@@ -58,7 +58,7 @@ All parameter field '`op_params_list`' of the model `sos+sa` include:
 where 'other' refers to the parameters of the `backbone` (such as vgg16) ,'cls' refers to the parameters of the `cls_head`, 
 'sos' refers to the parameters of `sos_head`, and 'sa' refers to the parameters of the `self-attention` module.
 
-## :deciduous_tree: Test
+## :deciduous_tree: Test (quick version by default here)
 * --debug_dir: a suffix is usually added to the test directory: `_#t1` to distinguish different test results of the same model, such as `../debug/ilsvrc/vgg16_sos+sa_v3_wp_#3_t1` ,  `../debug/ilsvrc/vgg16_sos+sa_v3_wp_#3_t2` , etc.
 * --scg_version: specify the version of SCG algorithm, '`v2`' is the default setting.
 * --sos_seg_method: need to align with the settings during training, default is '`TC`'.
