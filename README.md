@@ -1,4 +1,4 @@
-# WGOL-TPAMI
+# SSA-TPAMI
 PyTorch implementation for Self-Supervised Attention (SSA).
 
 ## :gear: Quick Start: Train & Test
