@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 class ScaledDotProductAttention(nn.Module):
 
-    def __init__(self, d_model, d_k, d_v, h, dropout=.1):
+    def __init__(self, d_model, d_k, d_v, h, weight=1, dropout=.1):
         """
         :param d_model: Output dimensionality of the model
         :param d_k: Dimensionality of queries and keys
@@ -24,6 +24,7 @@ class ScaledDotProductAttention(nn.Module):
         self.d_k = d_k
         self.d_v = d_v
         self.h = h
+        self.edge_weight = weight
 
         self.init_weights()
 
@@ -57,7 +58,7 @@ class ScaledDotProductAttention(nn.Module):
 
         if self_corr is not None:
             self_corr = self_corr.view(bt_sz, -1, nq, nk)
-            att_qk += self_corr
+            att_qk = att_qk + self.edge_weight * self_corr
         if attention_weights is not None:
             att_qk = att_qk * attention_weights
         if attention_mask is not None:

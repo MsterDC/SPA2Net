@@ -48,7 +48,7 @@ class VGG(nn.Module):
 
         if 'sa' in self.args.mode:
             self.sa = ScaledDotProductAttention(d_model=int(args.sa_neu_num), d_k=int(args.sa_neu_num),
-                                                d_v=int(args.sa_neu_num), h=int(args.sa_head))
+                                                d_v=int(args.sa_neu_num), h=int(args.sa_head), weight=args.sa_edge_weight)
 
         if 'sos' in self.args.mode and 'mc' not in self.args.mode:
             self.sos = nn.Sequential(
@@ -122,6 +122,18 @@ class VGG(nn.Module):
                 normed_logits = (logits - min_val) / (max_val - min_val + 1e-15)
             return self.hinge_loss(normed_logits, label.long(), p=self.args.hinge_p, margin=self.args.hinge_m)
 
+    def get_ra_loss(self, logits, label, th_bg=0.3, bg_fg_gap=0.0):
+        n, _, _, _ = logits.size()
+        cls_logits = F.softmax(logits, dim=1)
+        var_logits = torch.var(cls_logits, dim=1)
+        norm_var_logits = self.normalize_feat(var_logits)  # (n, w, h)
+        bg_mask = (norm_var_logits < th_bg).float()
+        fg_mask = (norm_var_logits > (th_bg + bg_fg_gap)).float()
+        cls_map = logits[torch.arange(n), label.long(), ...]
+        cls_map = torch.sigmoid(cls_map)
+        ra_loss = torch.mean(cls_map * bg_mask + (1 - cls_map) * fg_mask)
+        return ra_loss
+
     def get_hinge_loss(self, hg_logits, label):
         hg_cls_logits = torch.mean(torch.mean(hg_logits, dim=2), dim=2)  # GAP
         if self.args.hinge_norm == 'softmax':
@@ -159,17 +171,7 @@ class VGG(nn.Module):
         non_local_cos_ho[non_local_cos_ho < so_th] = 0
         return non_local_cos_fo, non_local_cos_ho
 
-    def get_ra_loss(self, logits, label, th_bg=0.3, bg_fg_gap=0.0):
-        n, _, _, _ = logits.size()
-        cls_logits = F.softmax(logits, dim=1)
-        var_logits = torch.var(cls_logits, dim=1)
-        norm_var_logits = self.normalize_feat(var_logits)  # (n, w, h)
-        bg_mask = (norm_var_logits < th_bg).float()
-        fg_mask = (norm_var_logits > (th_bg + bg_fg_gap)).float()
-        cls_map = logits[torch.arange(n), label.long(), ...]
-        cls_map = torch.sigmoid(cls_map)
-        ra_loss = torch.mean(cls_map * bg_mask + (1 - cls_map) * fg_mask)
-        return ra_loss
+
 
     def normalize_feat(self, feat):
         n, fh, fw = feat.size()
@@ -180,40 +182,7 @@ class VGG(nn.Module):
         norm_feat = norm_feat.view(n, fh, fw)
         return norm_feat
 
-    # def _feat_product(self, feat):
-    #     C1_2, C3, C4, feat_5 = feat
-    #     f_phi = feat_5
-    #     n, c_nl, h, w = f_phi.size()
-    #     if h != 14 or w != 14:
-    #         h, w = 14, 14
-    #         f_phi = F.interpolate(f_phi, size=(h, w), mode='bilinear', align_corners=True)
-    #     f_phi_clone = f_phi.clone().permute(0, 2, 3, 1).contiguous().view(n, -1, c_nl)
-    #     f_phi_normed = f_phi_clone / (torch.norm(f_phi_clone, dim=2, keepdim=True) + 1e-10)
-    #     qk = F.relu(torch.matmul(f_phi_normed, f_phi_normed.transpose(1, 2)))
-    #     q_k = qk.clone()
-    #     q_k = q_k / (torch.sum(q_k, dim=1, keepdim=True) + 1e-5)
-    #     sc_fo, sc_so = self.hsc(f_phi, fo_th=self.args.scg_fosc_th,
-    #                             so_th=self.args.scg_sosc_th,
-    #                             order=self.args.scg_order)
-    #     edge_code = torch.max(sc_fo, sc_so)  # (n,196,196)
-    #     qke = q_k + edge_code  # (n,196,196)
-    #     att = torch.softmax(qke, -1)
-    #     sa_qkev = torch.matmul(att, f_phi_clone).permute(0, 2, 1).contiguous().view(n, c_nl, h, w)
-    #     return sa_qkev
 
-    # def _forward_spa_SelfProduct(self, train_flag, feat):
-    #     C1_2, C3, C4, feat_5 = feat
-    #     # test self-product of feature
-    #     sc_fo, sc_so = None, None
-    #     cls_layer_in = None
-    #     if train_flag:
-    #         cls_layer_in = self._feat_product(feat)
-    #
-    #     if not train_flag:
-    #         sc_fo, sc_so = self.cal_sc((C1_2, C3, C4, feat_5))
-    #         cls_layer_in = feat_5
-    #     cls_map = self.cls(cls_layer_in)
-    #     return cls_map, sc_fo, sc_so
 
     def get_scm(self, logits, gt_label, sc_maps_fo, sc_maps_so):
         # get cam
@@ -286,9 +255,8 @@ class VGG(nn.Module):
         epoch, logits, label, hg_logits, pred_sos, gt_sos = loss_params.get('current_epoch'), loss_params.get('cls_logits'), \
                                                             loss_params.get('cls_label'), loss_params.get('hg_logits'), \
                                                             loss_params.get('pred_sos'), loss_params.get('gt_sos')
-        cls_logits = self.thr_avg_pool(
-            logits) if (self.args.use_tap == 'True') and (self.args.tap_start <= epoch) else torch.mean(
-            torch.mean(logits, dim=2), dim=2)
+        cls_logits = self.thr_avg_pool(logits) if (self.args.use_tap == 'True') and (self.args.tap_start <= epoch) \
+            else torch.mean(torch.mean(logits, dim=2), dim=2)
         # get cls loss
         loss = loss + self.get_cls_loss(cls_logits, label)
         if 'hinge' in self.args.mode:
@@ -497,31 +465,31 @@ class VGG(nn.Module):
         return cls_map, sos_map, sc_fo, sc_so
 
     def _forward_mc_sos(self, train_flag, current_epoch, feat):
-        C1_2, C3, C4, feat_5 = feat
-        cls_map = self.cls(feat_5)
+        f12, f3, f4, f5 = feat
+        cls_map = self.cls(f5)
         sc_fo, sc_so, sos_map = None, None, None
         if train_flag:  # train
             if self.args.sos_start <= current_epoch:
                 sc_fo, sc_so = self.cal_sc(feat)
-                sos_map = self.mc_sos(feat_5)
+                sos_map = self.mc_sos(f5)
         else:  # test
             sc_fo, sc_so = self.cal_sc(feat)
-            sos_map = self.mc_sos(feat_5)
+            sos_map = self.mc_sos(f5)
             sos_map = sos_map.squeeze()  # batch_size=1 when testing.
         return cls_map, sos_map, sc_fo, sc_so
 
     def _forward_sos(self, train_flag, current_epoch, feat):
-        C1_2, C3, C4, feat_5 = feat
-        cls_map = self.cls(feat_5)
+        f12, f3, f4, f5 = feat
+        cls_map = self.cls(f5)
         sc_fo, sc_so, sos_map = None, None, None
         if train_flag:  # train
             if self.args.sos_start <= current_epoch:
                 sc_fo, sc_so = self.cal_sc(feat)
-                sos_map = self.sos(feat_5)
+                sos_map = self.sos(f5)
                 sos_map = sos_map.squeeze()  # squeeze cls_channel
         else:  # test
             sc_fo, sc_so = self.cal_sc(feat)
-            sos_map = self.sos(feat_5)
+            sos_map = self.sos(f5)
             sos_map = sos_map.squeeze()  # squeeze batch_channel
         return cls_map, sos_map, sc_fo, sc_so
 
@@ -613,37 +581,40 @@ class VGG(nn.Module):
     # def _forward_sst_sa(self):
     #     pass
 
-    def forward(self, x, train_flag=True, cur_epoch=500):
-        ft_1_2 = self.conv1_2(x)
-        ft_3 = self.conv3(ft_1_2)
-        ft_4 = self.conv4(ft_3)
-        ft_5 = self.conv5(ft_4)
-        ft_1_5 = (ft_1_2, ft_3, ft_4, ft_5)
-        if self.args.mode == 'spa':
-            return self._forward_spa(train_flag, ft_1_5)
-        if self.args.mode == 'spa+hinge':
-            return self._forward_spa_hinge(train_flag, ft_1_5)
-        if self.args.mode == 'spa+sa':
-            return self._forward_spa_sa(train_flag, cur_epoch, ft_1_5)
-        if self.args.mode == 'sos':
-            return self._forward_sos(train_flag, cur_epoch, ft_1_5)
-        if 'sos+sa_v1' in self.args.mode:
-            return self._forward_sos_sa_v1(train_flag, cur_epoch, ft_1_5)
-        if 'sos+sa_v2' in self.args.mode:
-            return self._forward_sos_sa_v2(train_flag, cur_epoch, ft_1_5)
-        if 'sos+sa_v3' in self.args.mode:
-            return self._forward_sos_sa_v3(train_flag, cur_epoch, ft_1_5)
-        if self.args.mode == 'mc_sos':
-            return self._forward_mc_sos(train_flag, cur_epoch, ft_1_5)
-        # if self.args.mode == 'rcst':
-        #     return self._forward_rcst(train_flag, cur_epoch, feat)
-        # if self.args.mode == 'sst':
-        #     return self._forward_sst(train_flag, cur_epoch, feat)
-        # if self.args.mode == 'rcst+sa':
-        #     return self._forward_rcst_sa(train_flag, cur_epoch, feat)
-        # if self.args.mode == 'sst+sa':
-        #     pass
-        raise Exception("[Error] Invalid training mode: ", self.args.mode)
+    # def _feat_product(self, feat):
+    #     C1_2, C3, C4, feat_5 = feat
+    #     f_phi = feat_5
+    #     n, c_nl, h, w = f_phi.size()
+    #     if h != 14 or w != 14:
+    #         h, w = 14, 14
+    #         f_phi = F.interpolate(f_phi, size=(h, w), mode='bilinear', align_corners=True)
+    #     f_phi_clone = f_phi.clone().permute(0, 2, 3, 1).contiguous().view(n, -1, c_nl)
+    #     f_phi_normed = f_phi_clone / (torch.norm(f_phi_clone, dim=2, keepdim=True) + 1e-10)
+    #     qk = F.relu(torch.matmul(f_phi_normed, f_phi_normed.transpose(1, 2)))
+    #     q_k = qk.clone()
+    #     q_k = q_k / (torch.sum(q_k, dim=1, keepdim=True) + 1e-5)
+    #     sc_fo, sc_so = self.hsc(f_phi, fo_th=self.args.scg_fosc_th,
+    #                             so_th=self.args.scg_sosc_th,
+    #                             order=self.args.scg_order)
+    #     edge_code = torch.max(sc_fo, sc_so)  # (n,196,196)
+    #     qke = q_k + edge_code  # (n,196,196)
+    #     att = torch.softmax(qke, -1)
+    #     sa_qkev = torch.matmul(att, f_phi_clone).permute(0, 2, 1).contiguous().view(n, c_nl, h, w)
+    #     return sa_qkev
+
+    # def _forward_spa_SelfProduct(self, train_flag, feat):
+    #     C1_2, C3, C4, feat_5 = feat
+    #     # test self-product of feature
+    #     sc_fo, sc_so = None, None
+    #     cls_layer_in = None
+    #     if train_flag:
+    #         cls_layer_in = self._feat_product(feat)
+    #
+    #     if not train_flag:
+    #         sc_fo, sc_so = self.cal_sc((C1_2, C3, C4, feat_5))
+    #         cls_layer_in = feat_5
+    #     cls_map = self.cls(cls_layer_in)
+    #     return cls_map, sc_fo, sc_so
 
     # def get_masked_obj(self, sos_map, img):
     #     b_s, _, h, w = np.shape(img)
@@ -676,6 +647,40 @@ class VGG(nn.Module):
     #     #     pdb.set_trace()
     #     gt_masked.detach()
     #     return gt_masked
+
+    def forward(self, x, train_flag=True, cur_epoch=500):
+        ft_1_2 = self.conv1_2(x)
+        ft_3 = self.conv3(ft_1_2)
+        ft_4 = self.conv4(ft_3)
+        ft_5 = self.conv5(ft_4)
+        ft_1_5 = (ft_1_2, ft_3, ft_4, ft_5)
+        if self.args.mode == 'spa':
+            return self._forward_spa(train_flag, ft_1_5)
+        # if self.args.mode == 'spa+hinge':
+        #     return self._forward_spa_hinge(train_flag, ft_1_5)
+        if self.args.mode == 'spa+sa':
+            return self._forward_spa_sa(train_flag, cur_epoch, ft_1_5)
+        if self.args.mode == 'sos':
+            return self._forward_sos(train_flag, cur_epoch, ft_1_5)
+        if 'sos+sa_v1' in self.args.mode:
+            return self._forward_sos_sa_v1(train_flag, cur_epoch, ft_1_5)
+        if 'sos+sa_v2' in self.args.mode:
+            return self._forward_sos_sa_v2(train_flag, cur_epoch, ft_1_5)
+        if 'sos+sa_v3' in self.args.mode:
+            return self._forward_sos_sa_v3(train_flag, cur_epoch, ft_1_5)
+        # if self.args.mode == 'mc_sos':
+        #     return self._forward_mc_sos(train_flag, cur_epoch, ft_1_5)
+        # if self.args.mode == 'rcst':
+        #     return self._forward_rcst(train_flag, cur_epoch, feat)
+        # if self.args.mode == 'sst':
+        #     return self._forward_sst(train_flag, cur_epoch, feat)
+        # if self.args.mode == 'rcst+sa':
+        #     return self._forward_rcst_sa(train_flag, cur_epoch, feat)
+        # if self.args.mode == 'sst+sa':
+        #     pass
+        raise Exception("[Error] Invalid training mode: ", self.args.mode)
+
+
 
 
 def make_layers(cfg, dilation=None, batch_norm=False, instance_norm=False, inl=False):
@@ -768,6 +773,62 @@ def model(pretrained=False, **kwargs):
         model.load_state_dict(model_dict)
     return model
 
+def load_finetune(pretrained=True, **kwargs):
+    # construct model
+    layers = make_layers(cfg['O'], dilation=dilation['D1'])
+    cnv = np.cumsum(cnvs['O'])
+    model = VGG(layers, cnvs=cnv, **kwargs)
+    if pretrained:
+        pre2local_keymap = [('features.{}.weight'.format(i), 'conv1_2.{}.weight'.format(i)) for i in range(10)]
+        pre2local_keymap += [('features.{}.bias'.format(i), 'conv1_2.{}.bias'.format(i)) for i in range(10)]
+        pre2local_keymap += [('features.{}.weight'.format(i + 10), 'conv3.{}.weight'.format(i)) for i in range(7)]
+        pre2local_keymap += [('features.{}.bias'.format(i + 10), 'conv3.{}.bias'.format(i)) for i in range(7)]
+        pre2local_keymap += [('features.{}.weight'.format(i + 17), 'conv4.{}.weight'.format(i)) for i in range(7)]
+        pre2local_keymap += [('features.{}.bias'.format(i + 17), 'conv4.{}.bias'.format(i)) for i in range(7)]
+        pre2local_keymap += [('features.{}.weight'.format(i + 24), 'conv5.{}.weight'.format(i)) for i in range(7)]
+        pre2local_keymap += [('features.{}.bias'.format(i + 24), 'conv5.{}.bias'.format(i)) for i in range(7)]
+        pre2local_keymap = dict(pre2local_keymap)
+
+        model_dict = model.state_dict()
+        pretrained_file = os.path.join(kwargs['args'].pretrained_model_dir, kwargs['args'].pretrained_model)
+        if os.path.isfile(pretrained_file):
+            try:
+                pretrained_dict = torch.load(pretrained_file)
+                if 'state_dict' in pretrained_dict.keys():
+                    pretrained_dict = remove_prefix(pretrained_dict['state_dict'], 'module.')
+                else:
+                    pretrained_dict = remove_prefix(pretrained_dict, 'module.')
+                print('load fine-tuned model from {}'.format(pretrained_file))
+            except KeyError:
+                print("Loading fine-tuned model failed.")
+        else:
+            raise Exception('[Error] Fine-tuned model does not exist, please check.')
+        # 0. replace the key
+        pretrained_dict = {pre2local_keymap[k] if k in pre2local_keymap.keys() else k: v for k, v in
+                           pretrained_dict.items()}
+        # *. show the loading information
+        for k in pretrained_dict.keys():
+            if k not in model_dict:
+                print('Key {} is removed from fine-tuned model.'.format(k))
+        print(' ')
+        for k in model_dict.keys():
+            if k not in pretrained_dict:
+                print('Key {} is new added for current model.'.format(k))
+        # 1. filter out unnecessary keys
+        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+        # 2. overwrite entries in the existing state dict
+        model_dict.update(pretrained_dict)
+        # 3. load the new state dict
+        model.load_state_dict(model_dict)
+        return model
+    else:
+        raise Exception('[Error] Load fine-tune model is only used in training mode.')
+
+
+def remove_prefix(state_dict, prefix):
+    print('remove prefix \'{}\''.format(prefix))
+    f = lambda x: x.split(prefix, 1)[-1] if x.startswith(prefix) else x
+    return {f(key): value for key, value in state_dict.items()}
 
 if __name__ == '__main__':
     model(True)
