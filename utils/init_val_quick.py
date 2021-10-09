@@ -9,11 +9,11 @@ import torch.nn.functional as F
 import numpy as np
 
 from utils import AverageMeter
-from utils import evaluate
+from utils import evaluate_quick
 from utils.restore import restore
-from utils.localization import get_topk_boxes_hier, get_topk_boxes_hier_scg, get_topk_boxes_scg_v2, get_box_sos, \
-    get_topk_boxes_mc_sos
-from utils.vistools import save_im_heatmap_box, save_im_sim
+from utils.localization_quick import get_topk_boxes_hier, get_topk_boxes_hier_scg, get_topk_boxes_scg_v2, get_box_sos, \
+    get_topk_boxes_sos
+from utils.vistools_quick import save_im_heatmap_box, save_im_sim
 from models import *
 
 LR = 0.001
@@ -94,59 +94,129 @@ def get_model(args):
     return model
 
 
-def eval_loc(cls_logits, cls_map, img_path, label, gt_boxes, topk=(1, 5), threshold=None, mode='union', iou_th=0.5):
-    # print("[TEST] img_path:", img_path)
-    # print("[TEST] gt_boxes:", gt_boxes)
-    # import pdb; pdb.set_trace()
-    top_boxes, top_maps, gt_known_box, gt_known_map = get_topk_boxes_hier(cls_logits[0], cls_map, img_path, label,
-                                                                          topk=topk, threshold=threshold, mode=mode)
-    top1_box, top5_boxes = top_boxes
-    # update result record
-    (locerr_1, locerr_5), top1_wrong_detail = evaluate.locerr((top1_box, top5_boxes), label.data.long().numpy(),
-                                                              gt_boxes, topk=(1, 5), iou_th=iou_th)
-    locerr_gt_known, _ = evaluate.locerr((gt_known_box,), label.data.long().numpy(), gt_boxes, topk=(1,), iou_th=iou_th)
+def eval_loc(cls_logits, cls_map, label, gt_boxes, crop_size, topk=5, threshold=None, mode='union', iou_th=0.5):
+    """
+    @ written by Kevin
+    :param cls_logits: (20, 200)
+    :param cls_map: (20, 200, 14, 14)
+    :param label: [20]
+    :param gt_boxes: tuple => (20,)
+    :param crop_size: 224
+    :return: recording loc_err
+    """
+    _, topk_idx = cls_logits.topk(topk, 1, True, True)  # 20 * 5
+    topk_idx = topk_idx.tolist()  # 20
 
-    return locerr_1, locerr_5, locerr_gt_known[0], top_maps, top5_boxes, gt_known_map, top1_wrong_detail
+    locerr_1_batch = []
+    locerr_5_batch = []
+    locerr_gt_known_batch = []
+    top_maps_batch = []
+    top5_boxes_batch = []
+    gt_known_map_batch = []
+    top1_wrong_detail_batch = []
+
+    batch = cls_logits.shape[0]
+    for ind in range(batch):
+        top_boxes, top_maps, gt_known_box, gt_known_map = get_topk_boxes_hier(topk_idx[ind], cls_map[ind],
+                                                                              label[ind], crop_size=crop_size,
+                                                                              threshold=threshold,
+                                                                              mode=mode)
+        top1_box, top5_boxes = top_boxes
+        # update result record
+        gt_bbox_ind = list(map(float, gt_boxes[ind].split()))
+        (locerr_1, locerr_5), top1_wrong_detail = evaluate_quick.locerr((top1_box, top5_boxes), label[ind],
+                                                                        gt_bbox_ind, topk=(1, 5), iou_th=iou_th)
+        locerr_gt_known, _ = evaluate_quick.locerr((gt_known_box,), label[ind], gt_bbox_ind, topk=(1,), iou_th=iou_th)
+
+        locerr_1_batch.append(locerr_1)
+        locerr_5_batch.append(locerr_5)
+        locerr_gt_known_batch.append(locerr_gt_known[0])
+        top_maps_batch.append(top_maps)
+        top5_boxes_batch.append(top5_boxes)
+        gt_known_map_batch.append(gt_known_map)
+        top1_wrong_detail_batch.append(list(top1_wrong_detail))
+    top1_wrong_detail_batch = np.mean(np.array(top1_wrong_detail_batch), axis=0)
+    return np.mean(locerr_1_batch), np.mean(locerr_5_batch), np.mean(locerr_gt_known_batch), \
+           top_maps_batch, top5_boxes_batch, gt_known_map_batch, top1_wrong_detail_batch
 
 
-def eval_loc_sos(args, cls_logits, pred_scm, img_path, label, gt_boxes, topk=(1, 5), threshold=None, mode='union',
-                 iou_th=0.5):
+def eval_loc_sos(args, cls_logits, pred_scm, label, gt_boxes, topk=5, threshold=None, mode='union', iou_th=0.5):
+    _, topk_idx = cls_logits.topk(topk, 1, True, True)
+    topk_idx = topk_idx.tolist()
+    batch = cls_logits.shape[0]
+    locerr_1_batch = []
+    locerr_5_batch = []
+    locerr_gt_known_batch = []
+    top_maps_batch = []
+    top5_boxes_batch = []
+    top1_wrong_detail_batch = []
+
     # evaluate gt-known loc error
-    if len(pred_scm.shape) > 2:
-        gt_known_sos = pred_scm[label[0].long()]
-    else:
-        gt_known_sos = pred_scm
-    if args.sos_loss_method == 'BCE':
-        gt_known_sos = torch.sigmoid(gt_known_sos)
-    gt_known_box, gt_known_map = get_box_sos(gt_known_sos, img_path, threshold=threshold, gt_labels=label)
-    gt_known_locerr, gt_known_wrong_detail = evaluate.locerr(gt_known_box, label.data.long().numpy(), gt_boxes,
-                                                             topk=(1,), iou_th=iou_th)
-    # evaluate top-k loc error
-    top_boxes, top_maps = get_topk_boxes_mc_sos(cls_logits[0], pred_scm, img_path, topk=topk, threshold=threshold,
-                                                mode=mode, loss_method=args.sos_loss_method)
-    top1_box, top5_boxes = top_boxes
-    (locerr_1, locerr_5), top1_wrong_detail = evaluate.locerr((top1_box, top5_boxes), label.data.long().numpy(),
-                                                              gt_boxes, topk=(1, 5), iou_th=iou_th)
-    return locerr_1, locerr_5, gt_known_locerr[
-        0], top_maps, top5_boxes, top1_wrong_detail, gt_known_wrong_detail, gt_known_box, gt_known_map
+    for ind in range(batch):
+        gt_bbox_ind = list(map(float, gt_boxes[ind].split()))
+        if len(pred_scm.shape) > 3:
+            gt_known_sos = pred_scm[:, label[ind], ...]
+        else:
+            gt_known_sos = pred_scm[ind]
+        if args.sos_loss_method == 'BCE':
+            gt_known_sos = torch.sigmoid(gt_known_sos)
+        gt_known_box, gt_known_map = get_box_sos(gt_known_sos, args.crop_size, threshold=threshold, gt_labels=label[ind])
+        gt_known_locerr, gt_known_wrong_detail = evaluate_quick.locerr(gt_known_box, label[ind], gt_bbox_ind,
+                                                                       topk=(1,), iou_th=iou_th)
+        # evaluate top-k loc error
+        top_boxes, top_maps = get_topk_boxes_sos(topk_idx[ind], pred_scm[ind], args.crop_size, topk=(1, 5), threshold=threshold,
+                                                    mode=mode, loss_method=args.sos_loss_method)
+        top1_box, top5_boxes = top_boxes
+        (locerr_1, locerr_5), top1_wrong_detail = evaluate_quick.locerr((top1_box, top5_boxes), label[ind],
+                                                                        gt_bbox_ind, topk=(1, 5), iou_th=iou_th)
+        locerr_1_batch.append(locerr_1)
+        locerr_5_batch.append(locerr_5)
+        locerr_gt_known_batch.append(gt_known_locerr[0])
+        top_maps_batch.append(top_maps)
+        top5_boxes_batch.append(top5_boxes)
+        top1_wrong_detail_batch.append(list(top1_wrong_detail))
+    top1_wrong_detail_batch = np.mean(np.array(top1_wrong_detail_batch), axis=0)
+    return np.mean(locerr_1_batch), np.mean(locerr_5_batch), np.mean(locerr_gt_known_batch), \
+           top_maps_batch, top5_boxes_batch, top1_wrong_detail_batch
 
 
-def eval_loc_scg_v2(cls_logits, top_cams, gt_known_cams, aff_maps, img_path, label, gt_boxes,
+def eval_loc_scg_v2(cls_logits, top_cams, gt_known_cams, aff_maps, label, gt_boxes, crop_size,
                     topk=(1, 5), threshold=None, mode='union', iou_th=0.5, sc_maps_fo=None):
-    top_boxes, top_maps = get_topk_boxes_scg_v2(cls_logits[0], top_cams, aff_maps, img_path, topk=topk,
-                                                threshold=threshold, mode=mode, sc_maps_fo=sc_maps_fo)
-    top1_box, top5_boxes = top_boxes
-    # update result record
-    (locerr_1, locerr_5), top1_wrong_detail = evaluate.locerr((top1_box, top5_boxes), label.data.long().numpy(),
-                                                              gt_boxes, topk=(1, 5), iou_th=iou_th)
+    _, topk_idx = cls_logits.topk(topk, 1, True, True)
+    topk_idx = topk_idx.tolist()
 
-    # gt-known
-    gt_known_boxes, gt_known_maps = get_topk_boxes_scg_v2(cls_logits[0], gt_known_cams, aff_maps, img_path, topk=(1,),
-                                                          threshold=threshold, mode=mode, gt_labels=label,
-                                                          sc_maps_fo=sc_maps_fo)
-    # update result record
-    locerr_gt_known, _ = evaluate.locerr(gt_known_boxes, label.data.long().numpy(), gt_boxes, topk=(1,), iou_th=iou_th)
-    return locerr_1, locerr_5, locerr_gt_known[0], top_maps, top5_boxes, top1_wrong_detail
+    locerr_1_batch = []
+    locerr_5_batch = []
+    locerr_gt_known_batch = []
+    top_maps_batch = []
+    top5_boxes_batch = []
+    top1_wrong_detail_batch = []
+
+    batch = cls_logits.shape[0]
+    for ind in range(batch):
+        top_boxes, top_maps = get_topk_boxes_scg_v2(topk_idx[ind], top_cams[ind], aff_maps[ind], crop_size=crop_size,
+                                                    threshold=threshold, mode=mode, sc_maps_fo=sc_maps_fo)
+        top1_box, top5_boxes = top_boxes
+        # update result record
+        gt_bbox_ind = list(map(float, gt_boxes[ind].split()))
+        (locerr_1, locerr_5), top1_wrong_detail = evaluate_quick.locerr((top1_box, top5_boxes), label[ind],
+                                                                        gt_bbox_ind, topk=(1, 5), iou_th=iou_th)
+        # gt-known bbox evaluate
+        gt_known_boxes, gt_known_maps = get_topk_boxes_scg_v2(topk_idx[ind], gt_known_cams[ind], aff_maps[ind],
+                                                              crop_size=crop_size, topk=(1,), threshold=threshold,
+                                                              mode=mode, gt_labels=label[ind], sc_maps_fo=sc_maps_fo)
+        # update result record
+        locerr_gt_known, _ = evaluate_quick.locerr(gt_known_boxes, label[ind], gt_bbox_ind, topk=(1,), iou_th=iou_th)
+
+        locerr_1_batch.append(locerr_1)
+        locerr_5_batch.append(locerr_5)
+        locerr_gt_known_batch.append(locerr_gt_known[0])
+        top_maps_batch.append(top_maps)
+        top5_boxes_batch.append(top5_boxes)
+        top1_wrong_detail_batch.append(list(top1_wrong_detail))
+    top1_wrong_detail_batch = np.mean(np.array(top1_wrong_detail_batch), axis=0)
+    return np.mean(locerr_1_batch), np.mean(locerr_5_batch), np.mean(locerr_gt_known_batch), top_maps_batch, \
+           top5_boxes_batch, top1_wrong_detail_batch
 
 
 def eval_loc_scg(cls_logits, top_cams, gt_known_cams, aff_maps, img_path, label, gt_boxes,
@@ -156,13 +226,14 @@ def eval_loc_scg(cls_logits, top_cams, gt_known_cams, aff_maps, img_path, label,
                                                   sc_maps_fo=sc_maps_fo)
     top1_box, top5_boxes = top_boxes
     # update result record
-    (locerr_1, locerr_5), top1_wrong_detail = evaluate.locerr((top1_box, top5_boxes), label.data.long().numpy(),
-                                                              gt_boxes, topk=(1, 5), iou_th=iou_th)
+    (locerr_1, locerr_5), top1_wrong_detail = evaluate_quick.locerr((top1_box, top5_boxes), label.data.long().numpy(),
+                                                                    gt_boxes, topk=(1, 5), iou_th=iou_th)
     gt_known_boxes, gt_known_maps = get_topk_boxes_hier_scg(cls_logits[0], gt_known_cams, aff_maps, img_path, topk=(1,),
                                                             threshold=threshold, mode=mode, gt_labels=label,
                                                             fg_th=fg_th, bg_th=bg_th, sc_maps_fo=sc_maps_fo)
     # update result record
-    locerr_gt_known, _ = evaluate.locerr(gt_known_boxes, label.data.long().numpy(), gt_boxes, topk=(1,), iou_th=iou_th)
+    locerr_gt_known, _ = evaluate_quick.locerr(gt_known_boxes, label.data.long().numpy(), gt_boxes, topk=(1,),
+                                               iou_th=iou_th)
     return locerr_1, locerr_5, locerr_gt_known[0], top_maps, top5_boxes, top1_wrong_detail
 
 
@@ -242,17 +313,22 @@ def eval_loc_all(args, loc_params):
         loc_params.get('loc_err'), loc_params.get('cls_logits'), loc_params.get('loc_map'), loc_params.get('img_path'), \
         loc_params.get('label_in'), loc_params.get('gt_boxes'), loc_params.get('input_loc_img'), loc_params.get('idx'), \
         loc_params.get('show_idxs'), loc_params.get('sc_maps_fo'), loc_params.get('sc_maps_so')
-
-    if 'hinge' in args.mode:
-        hg_norm_logits, loc_map_hg = loc_params.get('hg_norm_logits'), loc_params.get('loc_map_hg')
-
     pred_sos = loc_params.get('pred_sos') if 'sos' in args.mode else None
 
+    # cls_logits: 20 * 200
+    # loc_map: 20 * 200 * 14 * 14
+    # input_loc_img: 20 * 200 * 224 * 224
+    # idx: start from 0
+    # sc_maps_fo = [none, none, [20,196,196], [20,196,196]]
+    # sc_maps_so = [none, none, [20,196,196], [20,196,196]]
+    # pred_sos: 20 * 14 * 14
+
     for th in args.threshold:
-        # CAM localization: top_maps与原始图像尺寸相同
+
         locerr_1, locerr_5, gt_known_locerr, top_maps, top5_boxes, gt_known_maps, top1_wrong_detail = \
-            eval_loc(cls_logits, loc_map, img_path[0], label_in, gt_boxes[idx], topk=(1, 5), threshold=th,
-                     mode='union', iou_th=args.iou_th)
+            eval_loc(cls_logits, loc_map, label_in, gt_boxes, crop_size=args.crop_size, topk=5,
+                     threshold=th, mode='union', iou_th=args.iou_th)
+
         # record CAM localization error
         loc_err['top1_locerr_{}'.format(th)].update(locerr_1, input_loc_img.size()[0])
         loc_err['top5_locerr_{}'.format(th)].update(locerr_5, input_loc_img.size()[0])
@@ -265,13 +341,15 @@ def eval_loc_all(args, loc_params):
         loc_err['top1_locerr_part_wrong_{}'.format(th)].update(region_part, input_loc_img.size()[0])
         loc_err['top1_locerr_more_wrong_{}'.format(th)].update(region_more, input_loc_img.size()[0])
         loc_err['top1_locerr_other_{}'.format(th)].update(region_wrong, input_loc_img.size()[0])
-        if args.debug and idx in show_idxs and (th == args.threshold[1]):
-            top1_wrong_detail_dir = 'cls_{}-mins_{}-rpart_{}-rmore_{}-rwrong_{}'.format(cls_wrong, multi_instances,
-                                                                                        region_part, region_more,
-                                                                                        region_wrong)
-            debug_dir = os.path.join(args.debug_dir, top1_wrong_detail_dir) if args.debug_detail else args.debug_dir
-            save_im_heatmap_box(img_path[0], top_maps, top5_boxes, debug_dir, gt_label=label_in.data.long().numpy(),
-                                gt_box=gt_boxes[idx], epoch=args.current_epoch, threshold=th)
+
+        if args.debug and (th == args.threshold[1]) and idx == 0:
+            for i in show_idxs:
+                top1_wrong_detail_dir = 'cls_{}-mins_{}-rpart_{}-rmore_{}-rwrong_{}'.format(cls_wrong, multi_instances,
+                                                                                            region_part, region_more,
+                                                                                            region_wrong)
+                debug_dir = os.path.join(args.debug_dir, top1_wrong_detail_dir) if args.debug_detail else args.debug_dir
+                save_im_heatmap_box(img_path[i], top_maps, top5_boxes, debug_dir, gt_label=label_in.data.long().numpy(),
+                                    gt_box=gt_boxes[i], epoch=args.current_epoch, threshold=th)
 
         # SCG localization: SCM + CAM
         sc_maps = []
@@ -287,18 +365,18 @@ def eval_loc_all(args, loc_params):
         else:
             sc_maps = sc_maps_so
 
+        locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
+            None, None, None, None, None, None,
         if args.scg_version == 'v1':
             locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
                 eval_loc_scg(cls_logits, top_maps, gt_known_maps, sc_maps[-1] + sc_maps[-2], img_path[0], label_in,
                              gt_boxes[idx], topk=(1, 5), threshold=th, mode='union',
-                             fg_th=0.1, bg_th=0.05, iou_th=args.iou_th,
-                             sc_maps_fo=None)
+                             fg_th=0.1, bg_th=0.05, iou_th=args.iou_th, sc_maps_fo=None)
         if args.scg_version == 'v2':
             locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
-                eval_loc_scg_v2(cls_logits, top_maps, gt_known_maps, sc_maps[-2] + sc_maps[-1], img_path[0],
-                                label_in, gt_boxes[idx], topk=(1, 5), threshold=th, mode='union',
-                                iou_th=args.iou_th,
-                                sc_maps_fo=None)
+                eval_loc_scg_v2(cls_logits, top_maps, gt_known_maps, sc_maps[-2] + sc_maps[-1], label_in,
+                                gt_boxes, crop_size=args.crop_size, topk=5, threshold=th, mode='union',
+                                iou_th=args.iou_th, sc_maps_fo=None)
 
         # record SCG localization error
         loc_err['top1_locerr_scg_{}'.format(th)].update(locerr_1_scg, input_loc_img.size()[0])
@@ -316,113 +394,29 @@ def eval_loc_all(args, loc_params):
         loc_err['top1_locerr_scg_other_{}'.format(th)].update(region_wrong_scg, input_loc_img.size()[0])
 
         # Visualization
-        if args.debug and idx in show_idxs and (th == args.threshold[1]):
-            top1_wrong_detail_dir = 'cls_{}-mins_{}-rpart_{}-rmore_{}-rwrong_{}_scg'.format(cls_wrong_scg,
-                                                                                            multi_instances_scg,
-                                                                                            region_part_scg,
-                                                                                            region_more_scg,
-                                                                                            region_wrong_scg)
-            debug_dir = os.path.join(args.debug_dir,
-                                     top1_wrong_detail_dir) if args.debug_detail else args.debug_dir
-            save_im_heatmap_box(img_path[0], top_maps_scg, top5_boxes_scg, debug_dir,
-                                gt_label=label_in.data.long().numpy(), gt_box=gt_boxes[idx],
-                                epoch=args.current_epoch, threshold=th, suffix='scg')
-            save_im_sim(img_path[0], sc_maps_fo[-2] + sc_maps_fo[-1], debug_dir,
-                        gt_label=label_in.data.long().numpy(), epoch=args.current_epoch, suffix='fo_45')
-            save_im_sim(img_path[0], sc_maps_so[-2] + sc_maps_so[-1], debug_dir,
-                        gt_label=label_in.data.long().numpy(), epoch=args.current_epoch, suffix='so_45')
-            save_im_sim(img_path[0], sc_maps[-2] + sc_maps[-1], debug_dir,
-                        gt_label=label_in.data.long().numpy(),
-                        epoch=args.current_epoch, suffix='com45')
-
-        ################################ Hinge Branch ###################################
-        if 'hinge' in args.mode:
-            # Hinge branch localization: top_maps与原始图像尺寸相同
-            locerr_1_hg, locerr_5_hg, gt_known_locerr_hg, top_maps_hg, top5_boxes_hg, gt_known_maps_hg, top1_wrong_detail_hg = \
-                eval_loc(hg_norm_logits, loc_map_hg, img_path[0], label_in, gt_boxes[idx], topk=(1, 5),
-                         threshold=th, mode='union', iou_th=args.iou_th)
-            # Hinge branch localization error
-            loc_err['top1_locerr_hinge_{}'.format(th)].update(locerr_1_hg, input_loc_img.size()[0])
-            loc_err['top5_locerr_hinge_{}'.format(th)].update(locerr_5_hg, input_loc_img.size()[0])
-            loc_err['gt_known_locerr_hinge_{}'.format(th)].update(gt_known_locerr_hg, input_loc_img.size()[0])
-            cls_wrong_hg, multi_instances_hg, region_part_hg, region_more_hg, region_wrong_hg = top1_wrong_detail_hg
-            right_hg = 1 - (cls_wrong_hg + multi_instances_hg + region_part_hg + region_more_hg + region_wrong_hg)
-            loc_err['top1_locerr_right_hinge_{}'.format(th)].update(right_hg, input_loc_img.size()[0])
-            loc_err['top1_locerr_cls_wrong_hinge_{}'.format(th)].update(cls_wrong_hg, input_loc_img.size()[0])
-            loc_err['top1_locerr_mins_wrong_hinge_{}'.format(th)].update(multi_instances_hg,
-                                                                         input_loc_img.size()[0])
-            loc_err['top1_locerr_part_wrong_hinge_{}'.format(th)].update(region_part_hg, input_loc_img.size()[0])
-            loc_err['top1_locerr_more_wrong_hinge_{}'.format(th)].update(region_more_hg, input_loc_img.size()[0])
-            loc_err['top1_locerr_other_hinge_{}'.format(th)].update(region_wrong_hg, input_loc_img.size()[0])
-            if args.debug and idx in show_idxs and (th == args.threshold[1]):
-                top1_wrong_detail_dir_hg = 'cls_{}-mins_{}-rpart_{}-rmore_{}-rwrong_hinge_{}'.format(cls_wrong_hg,
-                                                                                                     multi_instances_hg,
-                                                                                                     region_part_hg,
-                                                                                                     region_more_hg,
-                                                                                                     region_wrong_hg)
-                debug_dir_hg = os.path.join(args.debug_dir,
-                                            top1_wrong_detail_dir_hg) if args.debug_detail else args.debug_dir
-                save_im_heatmap_box(img_path[0], top_maps_hg, top5_boxes_hg, debug_dir_hg,
-                                    gt_label=label_in.data.long().numpy(),
-                                    gt_box=gt_boxes[idx], epoch=args.current_epoch, threshold=th, suffix='cam_hg')
-            # SCGv1 algorithm
-            if args.scg_version == 'v1':
-                locerr_1_scg_hg, locerr_5_scg_hg, gt_known_locerr_scg_hg, top_maps_scg_hg, top5_boxes_scg_hg, top1_wrong_detail_scg_hg = \
-                    eval_loc_scg(hg_norm_logits, top_maps_hg, gt_known_maps_hg, sc_maps[-1] + sc_maps[-2], img_path[0], label_in,
-                                 gt_boxes[idx], topk=(1, 5), threshold=th, mode='union',
-                                 fg_th=args.scg_fg_th, bg_th=args.scg_bg_th, iou_th=args.iou_th,
-                                 sc_maps_fo=None)
-            # SCGv2 algorithm: top_maps_scg 与原始图像相同尺寸
-            if args.scg_version == 'v2':
-                locerr_1_scg_hg, locerr_5_scg_hg, gt_known_locerr_scg_hg, top_maps_scg_hg, top5_boxes_scg_hg, top1_wrong_detail_scg_hg = \
-                    eval_loc_scg_v2(hg_norm_logits, top_maps_hg, gt_known_maps_hg, sc_maps[-2] + sc_maps[-1],
-                                    img_path[0],
-                                    label_in, gt_boxes[idx], topk=(1, 5), threshold=th, mode='union',
-                                    iou_th=args.iou_th, sc_maps_fo=None)
-
-            # record SCG localization error
-            loc_err['top1_locerr_scg_hinge_{}'.format(th)].update(locerr_1_scg_hg, input_loc_img.size()[0])
-            loc_err['top5_locerr_scg_hinge_{}'.format(th)].update(locerr_5_scg_hg, input_loc_img.size()[0])
-            loc_err['gt_known_locerr_scg_hinge_{}'.format(th)].update(gt_known_locerr_scg_hg, input_loc_img.size()[0])
-            cls_wrong_scg_hg, multi_instances_scg_hg, region_part_scg_hg, region_more_scg_hg, region_wrong_scg_hg = \
-                top1_wrong_detail_scg_hg
-            right_scg_hg = 1 - (
-                    cls_wrong_scg_hg + multi_instances_scg_hg + region_part_scg_hg + region_more_scg_hg + region_wrong_scg_hg)
-            loc_err['top1_locerr_scg_right_hinge_{}'.format(th)].update(right_scg_hg, input_loc_img.size()[0])
-            loc_err['top1_locerr_scg_cls_wrong_hinge_{}'.format(th)].update(cls_wrong_scg_hg, input_loc_img.size()[0])
-            loc_err['top1_locerr_scg_mins_wrong_hinge_{}'.format(th)].update(multi_instances_scg_hg, input_loc_img.size()[0])
-            loc_err['top1_locerr_scg_part_wrong_hinge_{}'.format(th)].update(region_part_scg_hg, input_loc_img.size()[0])
-            loc_err['top1_locerr_scg_more_wrong_hinge_{}'.format(th)].update(region_more_scg_hg, input_loc_img.size()[0])
-            loc_err['top1_locerr_scg_other_hinge_{}'.format(th)].update(region_wrong_scg_hg, input_loc_img.size()[0])
-
-            # Visualization
-            if args.debug and idx in show_idxs and (th == args.threshold[1]):
-                top1_wrong_detail_dir_hg = 'cls_{}-mins_{}-rpart_{}-rmore_{}-rwrong_{}_scg_hinge'.format(
-                    cls_wrong_scg_hg,
-                    multi_instances_scg_hg,
-                    region_part_scg_hg,
-                    region_more_scg_hg,
-                    region_wrong_scg_hg)
+        if args.debug and (th == args.threshold[1]) and idx == 0:
+            for i in show_idxs:
+                top1_wrong_detail_dir = 'cls_{}-mins_{}-rpart_{}-rmore_{}-rwrong_{}_scg'.format(cls_wrong_scg,
+                                                                                                multi_instances_scg,
+                                                                                                region_part_scg,
+                                                                                                region_more_scg,
+                                                                                                region_wrong_scg)
                 debug_dir = os.path.join(args.debug_dir,
-                                         top1_wrong_detail_dir_hg) if args.debug_detail else args.debug_dir
-                save_im_heatmap_box(img_path[0], top_maps_scg_hg, top5_boxes_scg_hg, debug_dir,
-                                    gt_label=label_in.data.long().numpy(), gt_box=gt_boxes[idx],
-                                    epoch=args.current_epoch, threshold=th, suffix='scg_hg')
-                save_im_sim(img_path[0], sc_maps_fo[-2] + sc_maps_fo[-1], debug_dir,
-                            gt_label=label_in.data.long().numpy(), epoch=args.current_epoch, suffix='fo_45_hg')
-                save_im_sim(img_path[0], sc_maps_so[-2] + sc_maps_so[-1], debug_dir,
-                            gt_label=label_in.data.long().numpy(), epoch=args.current_epoch, suffix='so_45_hg')
-                save_im_sim(img_path[0], sc_maps[-2] + sc_maps[-1], debug_dir,
-                            gt_label=label_in.data.long().numpy(),
-                            epoch=args.current_epoch, suffix='com45_hg')
+                                         top1_wrong_detail_dir) if args.debug_detail else args.debug_dir
+                save_im_heatmap_box(img_path[i], top_maps_scg, top5_boxes_scg, debug_dir,
+                                    gt_label=label_in.data.long().numpy(), gt_box=gt_boxes[i],
+                                    epoch=args.current_epoch, threshold=th, suffix='scg')
+                save_im_sim(img_path[i], sc_maps_fo[-2] + sc_maps_fo[-1], debug_dir,
+                            gt_label=label_in.data.long().numpy(), epoch=args.current_epoch, suffix='fo_45')
+                save_im_sim(img_path[i], sc_maps_so[-2] + sc_maps_so[-1], debug_dir,
+                            gt_label=label_in.data.long().numpy(), epoch=args.current_epoch, suffix='so_45')
+                save_im_sim(img_path[i], sc_maps[-2] + sc_maps[-1], debug_dir,
+                            gt_label=label_in.data.long().numpy(), epoch=args.current_epoch, suffix='com45')
 
         # SOS localization
         if 'sos' in args.mode:
-            locerr_1_sos, locerr_5_sos, gt_known_locerr_sos, top_sos_maps, top5_sos_boxes, top1_wrong_detail_sos, \
-            _, gt_known_box_sos, gt_known_sos_map = eval_loc_sos(args, cls_logits, pred_sos,
-                                                                 img_path[0], label_in,
-                                                                 gt_boxes[idx], threshold=th,
-                                                                 iou_th=args.iou_th)
+            locerr_1_sos, locerr_5_sos, gt_known_locerr_sos, top_sos_maps, top5_sos_boxes, top1_wrong_detail_sos = \
+                eval_loc_sos(args, cls_logits, pred_sos, label_in, gt_boxes, threshold=th, iou_th=args.iou_th)
             # record SOS location error
             loc_err['top1_locerr_sos_{}'.format(th)].update(locerr_1_sos, input_loc_img.size()[0])
             loc_err['top5_locerr_sos_{}'.format(th)].update(locerr_5_sos, input_loc_img.size()[0])
@@ -456,13 +450,8 @@ def eval_loc_all(args, loc_params):
 def print_fun(args, print_params):
     top1_clsacc, top5_clsacc, loc_err = print_params.get('top1_clsacc'), print_params.get(
         'top5_clsacc'), print_params.get('loc_err')
-    if 'hinge' in args.mode:
-        top1_clsacc_hg, top5_clsacc_hg = print_params.get('top1_clsacc_hg'), print_params.get('top5_clsacc_hg')
     print('== cls err ==\n')
     print('Top1: {:.2f} Top5: {:.2f}\n'.format(100.0 - top1_clsacc.avg, 100.0 - top5_clsacc.avg))
-    if 'hinge' in args.mode:
-        print('== hinge cls err ==\n')
-        print('Top1: {:.2f} Top5: {:.2f}\n'.format(100.0 - top1_clsacc_hg.avg, 100.0 - top5_clsacc_hg.avg))
     for th in args.threshold:
         print('=========== threshold: {} ===========\n'.format(th))
         print('== loc err ==\n')
@@ -482,29 +471,6 @@ def print_fun(args, print_params):
                                                          loc_err['top1_locerr_scg_part_wrong_{}'.format(th)].sum,
                                                          loc_err['top1_locerr_scg_more_wrong_{}'.format(th)].sum,
                                                          loc_err['top1_locerr_scg_other_{}'.format(th)].sum))
-        if 'hinge' in args.mode:
-            print('CAM-Hinge-Top1: {:.2f} Top5: {:.2f}\n'.format(loc_err['top1_locerr_hinge_{}'.format(th)].avg,
-                                                                 loc_err['top5_locerr_hinge_{}'.format(th)].avg))
-            print('CAM-Hinge-Top1_err: {} {} {} {} {} {}\n'.format(loc_err['top1_locerr_right_hinge_{}'.format(th)].sum,
-                                                                   loc_err[
-                                                                       'top1_locerr_cls_wrong_hinge_{}'.format(th)].sum,
-                                                                   loc_err['top1_locerr_mins_wrong_hinge_{}'.format(
-                                                                       th)].sum,
-                                                                   loc_err['top1_locerr_part_wrong_hinge_{}'.format(
-                                                                       th)].sum,
-                                                                   loc_err['top1_locerr_more_wrong_hinge_{}'.format(
-                                                                       th)].sum,
-                                                                   loc_err[
-                                                                       'top1_locerr_other_hinge_{}'.format(th)].sum))
-            print('SCG-Hinge-Top1: {:.2f} Top5: {:.2f}\n'.format(loc_err['top1_locerr_scg_hinge_{}'.format(th)].avg,
-                                                                 loc_err['top5_locerr_scg_hinge_{}'.format(th)].avg))
-            print('SCG-Hinge-Top1_err: {} {} {} {} {} {}\n'.format(
-                loc_err['top1_locerr_scg_right_hinge_{}'.format(th)].sum,
-                loc_err['top1_locerr_scg_cls_wrong_hinge_{}'.format(th)].sum,
-                loc_err['top1_locerr_scg_mins_wrong_hinge_{}'.format(th)].sum,
-                loc_err['top1_locerr_scg_part_wrong_hinge_{}'.format(th)].sum,
-                loc_err['top1_locerr_scg_more_wrong_hinge_{}'.format(th)].sum,
-                loc_err['top1_locerr_scg_other_hinge_{}'.format(th)].sum))
 
         if 'sos' in args.mode:
             print('SOS-Top1: {:.2f} Top5: {:.2f}\n'.format(loc_err['top1_locerr_sos_{}'.format(th)].avg,
@@ -521,11 +487,6 @@ def print_fun(args, print_params):
         print('SCG-Top1: {:.2f} \n'.format(loc_err['gt_known_locerr_scg_{}'.format(th)].avg))
         if 'sos' in args.mode:
             print('SOS-Top1: {:.2f} \n'.format(loc_err['gt_known_locerr_sos_{}'.format(th)].avg))
-
-        if 'hinge' in args.mode:
-            print('== Hinge Gt-Known loc err ==\n')
-            print('CAM-Hinge-Top1: {:.2f} \n'.format(loc_err['gt_known_locerr_hinge_{}'.format(th)].avg))
-            print('SCG-Hinge-Top1: {:.2f} \n'.format(loc_err['gt_known_locerr_scg_hinge_{}'.format(th)].avg))
 
 
 def get_top_max(feat):

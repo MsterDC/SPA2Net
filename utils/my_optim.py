@@ -61,25 +61,18 @@ def get_adam(args, model):
 
 
 def reduce_lr(args, optimizer, epoch, factor=0.1):
-    # if 'coco' in args.dataset:
-    #     change_points = [1,2,3,4,5]
-    # elif 'imagenet' in args.dataset:
-    #     change_points = [1,2,3,4,5,6,7,8,9,10,11,12]
-    # else:
-    #     change_points = None
-
-    values = args.decay_points.strip().split(',')
+    if args.decay_points == 'none':
+        values = [str(epoch)]
+    else:
+        values = args.decay_points.strip().split(',')
     try:
         change_points = map(lambda x: int(x.strip()), values)
     except ValueError:
         change_points = None
-
     if change_points is not None and epoch in change_points:
         for g in optimizer.param_groups:
             g['lr'] = g['lr'] * factor
-            print(epoch, g['lr'])
         return True
-
 
 
 def adjust_lr(args, optimizer, epoch):
@@ -93,12 +86,6 @@ def adjust_lr(args, optimizer, epoch):
         change_points = [30, 40]
     else:
         change_points = None
-    # else:
-
-    # if epoch in change_points:
-    #     lr = args.lr * 0.1**(change_points.index(epoch)+1)
-    # else:
-    #     lr = args.lr
 
     if change_points is not None:
         change_points = np.array(change_points)

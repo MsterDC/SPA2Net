@@ -10,11 +10,7 @@ import torch
 from torch import optim
 import torch.nn.functional as F
 import torch.backends.cuda as cudnn
-from torch.optim.lr_scheduler import StepLR, ExponentialLR
-from torch.optim.sgd import SGD
 
-from utils.scheduler import GradualWarmupScheduler
-from utils.restore import restore
 from utils import AverageMeter, MoveAverageMeter
 from models import *
 
@@ -41,39 +37,51 @@ class opts(object):
         self.parser.add_argument("--in_norm", type=str, default='True', help='normalize input or not')
         self.parser.add_argument("--num_workers", type=int, default=12)
         self.parser.add_argument("--disp_interval", type=int, default=DISP_INTERVAL)
-        self.parser.add_argument("--resume", type=str, default='False')
+
         self.parser.add_argument("--tencrop", type=str, default='False')
         self.parser.add_argument("--onehot", type=str, default='False')
-        self.parser.add_argument("--restore_from", type=str, default='')
         self.parser.add_argument("--global_counter", type=int, default=0)
         self.parser.add_argument("--current_epoch", type=int, default=0)
         self.parser.add_argument("--mixp", action='store_true', help='turn on amp training.')
+
+        self.parser.add_argument("--seed", default=None, type=int, help='seed for initializing training. ')
+        self.parser.add_argument("--use_tap", type=str, default='False')
+        self.parser.add_argument("--tap_th", type=float, default=0.1, help='threshold avg pooling')
+        self.parser.add_argument("--tap_start", type=float, default=0)
+        self.parser.add_argument("--cls_or_hinge", type=str, default='cls')
+        self.parser.add_argument("--hinge_norm", type=str, default='softmax', help='norm/softmax')
+        self.parser.add_argument("--hinge_lr", type=float, default=0.001)
+        self.parser.add_argument("--hinge_loss_weight", type=float, default=0.1)
+        self.parser.add_argument("--hinge_p", type=float, default=1)
+        self.parser.add_argument("--hinge_m", type=float, default=0.9)
+
+        self.parser.add_argument("--snapshot_dir", type=str, default='')
+        self.parser.add_argument("--log_dir", type=str, default='../log')
+        self.parser.add_argument("--load_finetune", type=str, default='False', help='use fine-tune model or pretrained')
         self.parser.add_argument("--pretrained_model_dir", type=str, default='../pretrained_models')
         self.parser.add_argument("--pretrained_model", type=str, default='vgg16.pth')
-        self.parser.add_argument("--seed", default=None, type=int, help='seed for initializing training. ')
+        self.parser.add_argument("--resume", type=str, default='False')
+        self.parser.add_argument("--restore_from", type=str, default='')
+        self.parser.add_argument("--gpus", type=str, default='0', help='-1 for cpu, split gpu id by comma')
+        self.parser.add_argument("--batch_size", type=int, default=64)
+        self.parser.add_argument("--decay_points", type=str, default='80')
+        self.parser.add_argument("--epoch", type=int, default=100)
+        self.parser.add_argument("--lr", type=float, default=LR)
+        self.parser.add_argument("--weight_decay", type=float, default=0.0005)
+
+        self.parser.add_argument("--ram", action='store_true', help='switch on restricted activation module.')
+        self.parser.add_argument("--ra_loss_weight", type=float, default=0.1, help='loss weight for the ra loss.')
+        self.parser.add_argument("--ram_start", type=float, default=10, help='the start epoch to introduce ra loss.')
+        self.parser.add_argument("--ram_th_bg", type=float, default=0.2, help='the variance threshold for back ground.')
+        self.parser.add_argument("--ram_bg_fg_gap", type=float, default=0.5, help='gap between fg & bg in ram.')
+
         self.parser.add_argument("--scg_blocks", type=str, default='2,3,4,5', help='2 for feat2, etc.')
         self.parser.add_argument("--scg_fosc_th", type=float, default=0.2)
         self.parser.add_argument("--scg_sosc_th", type=float, default=1)
         self.parser.add_argument("--scg_order", type=int, default=2, help='the order of similarity of HSC.')
         self.parser.add_argument("--scg_so_weight", type=float, default=1)
         self.parser.add_argument("--scg_com", action='store_true', help='switch on second order supervised.')
-        self.parser.add_argument("--ram", action='store_true', help='switch on restricted activation module.')
-        self.parser.add_argument("--ra_loss_weight", type=float, default=0.1, help='loss weight for the ra loss.')
-        self.parser.add_argument("--ram_start", type=float, default=10, help='the start epoch to introduce ra loss.')
-        self.parser.add_argument("--ram_th_bg", type=float, default=0.2, help='the variance threshold for back ground.')
-        self.parser.add_argument("--ram_bg_fg_gap", type=float, default=0.5, help='gap between fg & bg in ram.')
-        self.parser.add_argument("--use_tap", type=str, default='False')
-        self.parser.add_argument("--tap_th", type=float, default=0.1, help='threshold avg pooling')
-        self.parser.add_argument("--tap_start", type=float, default=0)
-        self.parser.add_argument("--watch_cam", action='store_true', help='save cam each iteration')
 
-        self.parser.add_argument("--snapshot_dir", type=str, default='')
-        self.parser.add_argument("--log_dir", type=str, default='../log')
-        self.parser.add_argument("--gpus", type=str, default='0', help='-1 for cpu, split gpu id by comma')
-        self.parser.add_argument("--batch_size", type=int, default=64)
-        self.parser.add_argument("--decay_points", type=str, default='80')
-        self.parser.add_argument("--epoch", type=int, default=100)
-        self.parser.add_argument("--lr", type=float, default=LR)
         self.parser.add_argument("--sos_lr", type=float, default=0.001)
         self.parser.add_argument("--sos_gt_seg", type=str, default='True', help='True / False')
         self.parser.add_argument("--sos_seg_method", type=str, default='BC', help='BC / TC')
@@ -84,19 +92,15 @@ class opts(object):
         self.parser.add_argument("--sos_start", type=float, default=10, help='the start epoch to introduce sos.')
         self.parser.add_argument("--sa_lr", type=float, default=0.001)
         self.parser.add_argument("--sa_use_edge", type=str, default='False', help='Add edge encoding or not')
+        self.parser.add_argument("--sa_edge_weight", type=float, default=1)
         self.parser.add_argument("--sa_edge_stage", type=str, default='5', help='4 for feat4, etc.')
         self.parser.add_argument("--sa_start", type=float, default=0, help='the start epoch to introduce sa module.')
         self.parser.add_argument("--sa_head", type=float, default=1, help='number of SA heads')
         self.parser.add_argument("--sa_neu_num", type=float, default=512, help='size of SA linear input')
 
-        self.parser.add_argument("--cls_or_hinge", type=str, default='cls')
-        self.parser.add_argument("--hinge_norm", type=str, default='softmax', help='norm/softmax')
-        self.parser.add_argument("--hinge_lr", type=float, default=0.001)
-        self.parser.add_argument("--hinge_loss_weight", type=float, default=0.1)
-        self.parser.add_argument("--hinge_p", type=float, default=1)
-        self.parser.add_argument("--hinge_m", type=float, default=0.9)
-
+        self.parser.add_argument("--warmup", type=str, default='False', help='switch use warmup training strategy.')
         self.parser.add_argument("--mode", type=str, default='sos+sa', help='spa/spa+hinge/sos/spa+sa/sos+sa/mc_sos')
+        self.parser.add_argument("--watch_cam", action='store_true', help='save cam each iteration')
 
         # self.parser.add_argument("--rcst_lr", type=float, default=0.005)
         # self.parser.add_argument("--rcst_signal", type=str, default='scm', help='sos / scm')
@@ -112,17 +116,11 @@ class opts(object):
         return opt
 
 
-def get_scheduler(optim):
-    # scheduler_warmup is chained with schduler_steplr
-    scheduler_steplr = StepLR(optim, step_size=10, gamma=0.1)
-    scheduler_warmup = GradualWarmupScheduler(optim, multiplier=1, total_epoch=5, after_scheduler=scheduler_steplr)
-    # this zero gradient update is needed to avoid a warning message, issue #8.
-    optim.zero_grad()
-    optim.step()
-
-
 def get_model(args):
-    model = eval(args.arch).model(pretrained=True, num_classes=args.num_classes, args=args)
+    if args.load_finetune == 'True':
+        model = eval(args.arch).load_finetune(num_classes=args.num_classes, args=args)
+    else:
+        model = eval(args.arch).model(pretrained=True, num_classes=args.num_classes, args=args)
     model.to(args.device)
 
     lr = args.lr
@@ -198,27 +196,36 @@ def get_model(args):
         #     elif 'bias' in name:
         #         fpn_bias_list.append(value)
         #     continue
+    # set params list
+    optim_params_list = []
     op_params_list = [{'params': other_weight_list, 'lr': lr}, {'params': other_bias_list, 'lr': lr * 2},
                       {'params': cls_weight_list, 'lr': lr * 10}, {'params': cls_bias_list, 'lr': lr * 20}]
-
+    optim_params_list.append('other_weight')
+    optim_params_list.append('other_bias')
+    optim_params_list.append('cls_weight')
+    optim_params_list.append('cls_bias')
     if 'sos' in args.mode:
         op_params_list.append({'params': sos_weight_list, 'lr': sos_lr})
         op_params_list.append({'params': sos_bias_list, 'lr': sos_lr * 2})
+        optim_params_list.append('sos_weight')
+        optim_params_list.append('sos_bias')
     if 'sa' in args.mode:
         op_params_list.append({'params': sa_weight_list, 'lr': sa_lr})
         op_params_list.append({'params': sa_bias_list, 'lr': sa_lr * 2})
+        optim_params_list.append('sa_weight')
+        optim_params_list.append('sa_bias')
     if 'hinge' in args.mode:
         op_params_list.append({'params': hg_weight_list, 'lr': hg_lr * 10})
         op_params_list.append({'params': hg_bias_list, 'lr': hg_lr * 20})
+        optim_params_list.append('hinge_weight')
+        optim_params_list.append('hinge_bias')
     # if 'rcst' in args.mode or 'sst' in args.mode:
     #     op_params_list.append({'params': fpn_weight_list, 'lr': rcst_lr})
     #     op_params_list.append({'params': fpn_bias_list, 'lr': rcst_lr * 2})
-    optimizer = optim.SGD(op_params_list, momentum=0.9, weight_decay=0.0005, nesterov=True)
-    model = torch.nn.DataParallel(model, args.gpus)
-    if args.resume == 'True':
-        restore(args, model, optimizer, including_opt=False)
 
-    return model, optimizer
+    optimizer = optim.SGD(op_params_list, momentum=0.9, weight_decay=args.weight_decay, nesterov=True)
+    model = torch.nn.DataParallel(model, args.gpus)
+    return model, optimizer, optim_params_list
 
 
 def save_checkpoint(args, state, is_best, filename='checkpoint.pth.tar'):
