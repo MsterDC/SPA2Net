@@ -41,6 +41,7 @@ bash ./val_sst_ilsvrc_quick.sh  # Quick Version for ILSVRC (**Recommend**)
 * Please use the parameter `mode` (Type: String) to control the method you want to train or test. 
 * The currently supported `mode` include: `spa` / `spa+sa` / `sos` / `sos+sa_v1` / `sos+sa_v2` / `sos+sa_v3`(Default).
 * When you assign parameter `mode`, don't worry about other parameters that are not used in the current `mode`, because the irrelevant parameters will be blocked in the code. 
+* Using `Quick` version script for testing, it will take about **14 minutes** on `CUB` and **90 minutes** on `ILSVRC`, respectively. (GPU:TU102 [TITAN RTX])
 
 
 ### :pushpin: [Other]
