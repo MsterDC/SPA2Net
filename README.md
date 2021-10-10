@@ -1,8 +1,8 @@
 # SSA-TPAMI
 PyTorch implementation for Self-Supervised Attention (SSA).
 
-## 🔥  Update: new added SCHEDULE.md in path `scripts/`
-* Please refer to [SCHEDULE](https://github.com/MsterDC/SSA-TPAMI/blob/main/scripts/SCHEDULE.md) for details of next training task.
+## 🔥  Update(2021.10.10): new added [SCHEDULE.md](https://github.com/MsterDC/SSA-TPAMI/blob/main/scripts/SCHEDULE.md) in path `scripts/`
+* Please refer to the [file](https://github.com/MsterDC/SSA-TPAMI/blob/main/scripts/SCHEDULE.md) for details of next training task.
 
 ## :gear: Quick Start: Train & Test
 
