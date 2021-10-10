@@ -17,10 +17,10 @@ python val_sst_quick.py \
     --scg_blocks=4,5 \
     --scg_so_weight=1 \
     --scg_order=2 \
-    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_wp_#3 \
-    --debug_dir=../debug/ilsvrc/vgg16_sos+sa_v3_wp_#3_ttt \
+    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_wp_#15 \
+    --debug_dir=../debug/ilsvrc/vgg16_sos+sa_v3_wp_#15_t1 \
     --batch_size=20 \
-    --restore_from=ilsvrc_epoch_15.pth.tar \
+    --restore_from=ilsvrc_epoch_17.pth.tar \
     --scg_version=v2 \
     --scg_fosc_th=0.2 \
     --scg_sosc_th=1 \
