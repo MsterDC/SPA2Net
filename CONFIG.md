@@ -2,7 +2,7 @@
 
 This document contains detailed configuration for parameters using in training and testing.
 
-## 🔥 Update: [Repair Function] Parameter `--debug` can be used to visualize the localization result.
+### 🔥 Update: [Repair Function] Parameter `--debug` can be used to visualize the localization result.
 
 ## :deciduous_tree: Train
 * --snapshot_dir: prefixes: `../snapshots/ilsvrc/` for `ILSVRC` and `../snapshots/` for `CUB`, and the following format is recommended: `Base_Mode_#ExpNumber`, such as `../snapshots/ilsvrc/vgg16_sos+sa_v3_#1`.
