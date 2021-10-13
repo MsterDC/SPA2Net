@@ -38,7 +38,7 @@ python train_sst.py \
     --pretrained_model_dir=../snapshots/ilsvrc/vgg16_spa_#1 \
     --resume=False \
     --restore_from=none \
-    --ra_loss_weight=1 \
+    --ra_loss_weight=0.5 \
     --ram_start=3 \
     --ram_th_bg=0.1 \
     --ram_bg_fg_gap=0.2 \

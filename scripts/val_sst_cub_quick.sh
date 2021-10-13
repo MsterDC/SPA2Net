@@ -18,7 +18,7 @@ python val_sst_quick.py \
     --use_tap=False \
     --tap_th=0.1 \
     --snapshot_dir=../snapshots/vgg16_sos+sa_v3_#28 \
-    --debug_dir=../debug/vgg16_sos+sa_v3_#28_ttt \
+    --debug_dir=../debug/vgg16_sos+sa_v3_#28_testquick \
     --batch_size=20 \
     --restore_from=cub_epoch_108.pth.tar \
     --threshold=0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5 \
@@ -34,4 +34,4 @@ python val_sst_quick.py \
     --sa_head=8 \
     --sa_neu_num=512 \
     --mode=sos+sa_v3 \
-#    --debug \
+    --debug \

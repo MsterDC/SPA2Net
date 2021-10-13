@@ -17,14 +17,14 @@ python val_sst_quick.py \
     --scg_blocks=4,5 \
     --scg_so_weight=1 \
     --scg_order=2 \
-    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_wp_#15 \
-    --debug_dir=../debug/ilsvrc/vgg16_sos+sa_v3_wp_#15_t1 \
-    --batch_size=20 \
-    --restore_from=ilsvrc_epoch_17.pth.tar \
+    --snapshot_dir=../snapshots/ilsvrc/vgg16_spa_#1 \
+    --debug_dir=../debug/ilsvrc/vgg16_spa_#1_t1 \
+    --batch_size=15 \
+    --restore_from=ilsvrc_epoch_20.pth.tar \
     --scg_version=v2 \
     --scg_fosc_th=0.2 \
     --scg_sosc_th=1 \
-    --gpus=0 \
+    --gpus=3 \
     --threshold=0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5 \
     --sos_seg_method=TC \
     --sos_loss_method=BCE \
@@ -33,5 +33,5 @@ python val_sst_quick.py \
     --sa_edge_stage=4,5 \
     --sa_head=8 \
     --sa_neu_num=512 \
-    --mode=sos+sa_v3 \
+    --mode=spa \
 #    --debug \
