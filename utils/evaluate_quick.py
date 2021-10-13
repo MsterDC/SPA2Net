@@ -64,34 +64,7 @@ def get_badcase_detail(top1_bbox, gt_bboxes, gt_label, max_iou, max_gt_id):
         return cls_wrong, multi_instances, region_part, region_more, region_wrong
     region_wrong = 1
     return cls_wrong, multi_instances, region_part, region_more, region_wrong
-    #
 
-
-# def locerr(topk_boxes, gt_labels, gt_boxes, topk=(1,), iou_th=0.5):
-#     assert len(topk_boxes) == len(topk)
-#     gt_label = gt_labels[0]
-#     gt_boxes = gt_boxes
-#     gt_box_cnt = len(gt_boxes) // 4
-#     topk_rslt = []
-#     for topk_box in topk_boxes:
-#         err = 1
-#         for cls_box in topk_box:
-#             max_iou = 0
-#             max_gt_id = 0
-#             for i in range(gt_box_cnt):
-#                 gt_box = gt_boxes[i * 4:(i + 1) * 4]
-#                 iou_i = cal_iou(cls_box[1:], gt_box)
-#                 if iou_i > max_iou:
-#                     max_iou = iou_i
-#                     max_gt_id = i
-#             if len(topk_box) == 1:
-#                 wrong_details = get_badcase_detail(cls_box, gt_boxes, gt_labels, max_iou, max_gt_id)
-#             if cls_box[0] == gt_label and max_iou > iou_th:
-#                 err = 0
-#                 break
-#         topk_rslt.append(float(err * 100.0))
-#
-#     return topk_rslt, wrong_details
 
 def locerr(topk_boxes, gt_labels, gt_boxes, topk=(1,), iou_th=0.5):
     assert len(topk_boxes) == len(topk)
@@ -118,6 +91,7 @@ def locerr(topk_boxes, gt_labels, gt_boxes, topk=(1,), iou_th=0.5):
         topk_rslt.append(float(err * 100.0))
 
     return topk_rslt, wrong_details
+
 
 def colocerr(topk_boxes, gt_labels, gt_boxes, topk=(1,)):
     assert len(topk_boxes) == len(topk)

@@ -482,11 +482,7 @@ def whitening_tensor(feat):
     return norm_feat
 
 
-def norm_atten_map(attention_map):
-    min_val = np.min(attention_map)
-    max_val = np.max(attention_map)
-    atten_norm = (attention_map - min_val) / (max_val - min_val + 1e-10)
-    return atten_norm
+
 
 
 def save_im_gcam_ggrads(im_file, grads, save_dir, layers=None, topk=5):
@@ -998,6 +994,27 @@ def norm_atten_map(attention_map):
     max_val = np.max(attention_map)
     atten_norm = (attention_map - min_val) / (max_val - min_val + 1e-10)
     return atten_norm
+
+
+def norm_max(fm):
+    max_val = np.max(fm)
+    norm_map = fm / max_val
+    return norm_map
+
+
+def norm_pas(fm, percentile):
+    min_val = np.min(fm)
+    d_F_min = fm - min_val
+    p_fm = np.percentile(d_F_min, q=percentile)
+    normed_fm = d_F_min / p_fm
+    return normed_fm
+
+
+def norm_ivr(fm, percentile):
+    p_fm = np.percentile(fm, q=percentile)
+    d_F_p = fm - p_fm
+    normed_fm = d_F_p / np.max(d_F_p)
+    return normed_fm
 
 
 def norm_for_batch_map(scm):

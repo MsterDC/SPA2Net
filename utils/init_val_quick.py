@@ -13,7 +13,7 @@ from utils import evaluate_quick
 from utils.restore import restore
 from utils.localization_quick import get_topk_boxes_hier, get_topk_boxes_hier_scg, get_topk_boxes_scg_v2, get_box_sos, \
     get_topk_boxes_sos
-from utils.vistools_quick import save_im_heatmap_box, save_im_sim
+from utils.vistools_quick import save_im_heatmap_box, save_im_sim, debug_vis_loc, debug_vis_sc
 from models import *
 
 LR = 0.001
@@ -219,22 +219,43 @@ def eval_loc_scg_v2(cls_logits, top_cams, gt_known_cams, aff_maps, label, gt_box
            top5_boxes_batch, top1_wrong_detail_batch
 
 
-def eval_loc_scg(cls_logits, top_cams, gt_known_cams, aff_maps, img_path, label, gt_boxes,
-                 topk=(1, 5), threshold=None, mode='union', fg_th=0.1, bg_th=0.01, iou_th=0.5, sc_maps_fo=None):
-    top_boxes, top_maps = get_topk_boxes_hier_scg(cls_logits[0], top_cams, aff_maps, img_path, topk=topk,
-                                                  threshold=threshold, mode=mode, fg_th=fg_th, bg_th=bg_th,
-                                                  sc_maps_fo=sc_maps_fo)
-    top1_box, top5_boxes = top_boxes
-    # update result record
-    (locerr_1, locerr_5), top1_wrong_detail = evaluate_quick.locerr((top1_box, top5_boxes), label.data.long().numpy(),
-                                                                    gt_boxes, topk=(1, 5), iou_th=iou_th)
-    gt_known_boxes, gt_known_maps = get_topk_boxes_hier_scg(cls_logits[0], gt_known_cams, aff_maps, img_path, topk=(1,),
-                                                            threshold=threshold, mode=mode, gt_labels=label,
-                                                            fg_th=fg_th, bg_th=bg_th, sc_maps_fo=sc_maps_fo)
-    # update result record
-    locerr_gt_known, _ = evaluate_quick.locerr(gt_known_boxes, label.data.long().numpy(), gt_boxes, topk=(1,),
-                                               iou_th=iou_th)
-    return locerr_1, locerr_5, locerr_gt_known[0], top_maps, top5_boxes, top1_wrong_detail
+def eval_loc_scg(cls_logits, top_cams, gt_known_cams, aff_maps, label, gt_boxes, crop_size, topk=(1, 5), threshold=None,
+                 mode='union', fg_th=0.1, bg_th=0.2, iou_th=0.5, sc_maps_fo=None):
+    _, topk_idx = cls_logits.topk(topk, 1, True, True)
+    topk_idx = topk_idx.tolist()
+
+    locerr_1_batch = []
+    locerr_5_batch = []
+    locerr_gt_known_batch = []
+    top_maps_batch = []
+    top5_boxes_batch = []
+    top1_wrong_detail_batch = []
+
+    batch = cls_logits.shape[0]
+    for ind in range(batch):
+        top_boxes, top_maps = get_topk_boxes_hier_scg(topk_idx[ind], top_cams[ind], aff_maps[ind], crop_size=crop_size,
+                                                      threshold=threshold, mode=mode, fg_th=fg_th, bg_th=bg_th, sc_maps_fo=sc_maps_fo)
+        top1_box, top5_boxes = top_boxes
+        # update result record
+        gt_bbox_ind = list(map(float, gt_boxes[ind].split()))
+        (locerr_1, locerr_5), top1_wrong_detail = evaluate_quick.locerr((top1_box, top5_boxes), label[ind],
+                                                                        gt_bbox_ind, topk=(1, 5), iou_th=iou_th)
+        # gt-known bbox evaluate
+        gt_known_boxes, gt_known_maps = get_topk_boxes_hier_scg(topk_idx[ind], gt_known_cams[ind], aff_maps[ind],
+                                                                crop_size=crop_size, topk=(1,), threshold=threshold,
+                                                                mode=mode, fg_th=fg_th, bg_th=bg_th, gt_labels=label[ind], sc_maps_fo=sc_maps_fo)
+        # update result record
+        locerr_gt_known, _ = evaluate_quick.locerr(gt_known_boxes, label[ind], gt_bbox_ind, topk=(1,), iou_th=iou_th)
+
+        locerr_1_batch.append(locerr_1)
+        locerr_5_batch.append(locerr_5)
+        locerr_gt_known_batch.append(locerr_gt_known[0])
+        top_maps_batch.append(top_maps)
+        top5_boxes_batch.append(top5_boxes)
+        top1_wrong_detail_batch.append(list(top1_wrong_detail))
+    top1_wrong_detail_batch = np.mean(np.array(top1_wrong_detail_batch), axis=0)
+    return np.mean(locerr_1_batch), np.mean(locerr_5_batch), np.mean(locerr_gt_known_batch), top_maps_batch, \
+           top5_boxes_batch, top1_wrong_detail_batch
 
 
 def init_meters(args):
@@ -342,16 +363,14 @@ def eval_loc_all(args, loc_params):
         loc_err['top1_locerr_more_wrong_{}'.format(th)].update(region_more, input_loc_img.size()[0])
         loc_err['top1_locerr_other_{}'.format(th)].update(region_wrong, input_loc_img.size()[0])
 
-        if args.debug and (th == args.threshold[1]) and idx == 0:
-            for i in show_idxs:
-                top1_wrong_detail_dir = 'cls_{}-mins_{}-rpart_{}-rmore_{}-rwrong_{}'.format(cls_wrong, multi_instances,
-                                                                                            region_part, region_more,
-                                                                                            region_wrong)
-                debug_dir = os.path.join(args.debug_dir, top1_wrong_detail_dir) if args.debug_detail else args.debug_dir
-                save_im_heatmap_box(img_path[i], top_maps, top5_boxes, debug_dir, gt_label=label_in.data.long().numpy(),
-                                    gt_box=gt_boxes[i], epoch=args.current_epoch, threshold=th)
+        # Visualization
+        detail_cam = {'cls_wrong': cls_wrong, 'multi_instances': multi_instances,
+                  'region_part': region_part, 'region_more': region_more,
+                  'region_wrong': region_wrong}
+        debug_vis_loc(args, idx, show_idxs, img_path, top_maps, top5_boxes, label_in.data.long().numpy(),
+                      gt_boxes, detail_cam, suffix='cam')
 
-        # SCG localization: SCM + CAM
+        # SCG
         sc_maps = []
         if args.scg_com:
             for sc_map_fo_i, sc_map_so_i in zip(sc_maps_fo, sc_maps_so):
@@ -369,8 +388,8 @@ def eval_loc_all(args, loc_params):
             None, None, None, None, None, None,
         if args.scg_version == 'v1':
             locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
-                eval_loc_scg(cls_logits, top_maps, gt_known_maps, sc_maps[-1] + sc_maps[-2], img_path[0], label_in,
-                             gt_boxes[idx], topk=(1, 5), threshold=th, mode='union',
+                eval_loc_scg(cls_logits, top_maps, gt_known_maps, sc_maps[-2] + sc_maps[-1], label_in,
+                             gt_boxes, crop_size=args.crop_size, topk=5, threshold=th, mode='union',
                              fg_th=0.1, bg_th=0.05, iou_th=args.iou_th, sc_maps_fo=None)
         if args.scg_version == 'v2':
             locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
@@ -394,24 +413,14 @@ def eval_loc_all(args, loc_params):
         loc_err['top1_locerr_scg_other_{}'.format(th)].update(region_wrong_scg, input_loc_img.size()[0])
 
         # Visualization
-        if args.debug and (th == args.threshold[1]) and idx == 0:
-            for i in show_idxs:
-                top1_wrong_detail_dir = 'cls_{}-mins_{}-rpart_{}-rmore_{}-rwrong_{}_scg'.format(cls_wrong_scg,
-                                                                                                multi_instances_scg,
-                                                                                                region_part_scg,
-                                                                                                region_more_scg,
-                                                                                                region_wrong_scg)
-                debug_dir = os.path.join(args.debug_dir,
-                                         top1_wrong_detail_dir) if args.debug_detail else args.debug_dir
-                save_im_heatmap_box(img_path[i], top_maps_scg, top5_boxes_scg, debug_dir,
-                                    gt_label=label_in.data.long().numpy(), gt_box=gt_boxes[i],
-                                    epoch=args.current_epoch, threshold=th, suffix='scg')
-                save_im_sim(img_path[i], sc_maps_fo[-2] + sc_maps_fo[-1], debug_dir,
-                            gt_label=label_in.data.long().numpy(), epoch=args.current_epoch, suffix='fo_45')
-                save_im_sim(img_path[i], sc_maps_so[-2] + sc_maps_so[-1], debug_dir,
-                            gt_label=label_in.data.long().numpy(), epoch=args.current_epoch, suffix='so_45')
-                save_im_sim(img_path[i], sc_maps[-2] + sc_maps[-1], debug_dir,
-                            gt_label=label_in.data.long().numpy(), epoch=args.current_epoch, suffix='com45')
+        detail_scg = {'cls_wrong': cls_wrong_scg, 'multi_instances': multi_instances_scg,
+                      'region_part': region_part_scg, 'region_more': region_more_scg,
+                      'region_wrong': region_wrong_scg}
+        sc_maps_fo_fuse = sc_maps_fo[-2] + sc_maps_fo[-1]
+        sc_maps_so_fuse = sc_maps_so[-2] + sc_maps_so[-1]
+        sc_maps_fuse = sc_maps[-2] + sc_maps[-1]
+        debug_vis_loc(args, idx, show_idxs, img_path, top_maps_scg, top5_boxes_scg, label_in.data.long().numpy(), gt_boxes, detail_scg, suffix='scg')
+        debug_vis_sc(args, idx, show_idxs, img_path, sc_maps_fo_fuse, sc_maps_so_fuse, sc_maps_fuse, label_in.data.long().numpy(), detail_scg)
 
         # SOS localization
         if 'sos' in args.mode:
@@ -432,18 +441,13 @@ def eval_loc_all(args, loc_params):
             loc_err['top1_locerr_part_wrong_sos_{}'.format(th)].update(region_part_sos, input_loc_img.size()[0])
             loc_err['top1_locerr_more_wrong_sos_{}'.format(th)].update(region_more_sos, input_loc_img.size()[0])
             loc_err['top1_locerr_other_sos_{}'.format(th)].update(region_wrong_sos, input_loc_img.size()[0])
-            if args.debug and idx in show_idxs and (th == args.threshold[-1]):
-                top1_wrong_detail_dir_sos = 'cls_{}-mins_{}-rpart_{}-rmore_{}-rwrong_{}_sos'.format(
-                    cls_wrong_sos,
-                    multi_instances_sos,
-                    region_part_sos,
-                    region_more_sos,
-                    region_wrong_sos)
-                debug_dir = os.path.join(args.debug_dir,
-                                         top1_wrong_detail_dir_sos) if args.debug_detail else args.debug_dir
-                save_im_heatmap_box(img_path[0], top_sos_maps, top5_sos_boxes, debug_dir,
-                                    gt_label=label_in.data.long().numpy(), gt_box=gt_boxes[idx],
-                                    epoch=args.current_epoch, threshold=th, suffix='sos')
+
+            # Visualization
+            detail_sos = {'cls_wrong': cls_wrong_sos, 'multi_instances': multi_instances_sos,
+                          'region_part': region_part_sos, 'region_more': region_more_sos,
+                          'region_wrong': region_wrong_sos}
+            debug_vis_loc(args, idx, show_idxs, img_path, top_sos_maps, top5_sos_boxes, label_in.data.long().numpy(),
+                          gt_boxes, detail_sos, suffix='sos')
     return loc_err
 
 

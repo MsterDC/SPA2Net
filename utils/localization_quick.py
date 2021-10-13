@@ -177,7 +177,7 @@ def get_topk_boxes_scg_v2(cls_inds, top_cams, sc_maps, crop_size, topk=(1, 5), g
             cam_sc_map = cam_sc_dot.reshape(w_sc, h_sc)
             sc_map_cls_i = cam_sc_map * (cam_sc_map >= 0)
             sc_map_cls_i = (sc_map_cls_i - np.min(sc_map_cls_i)) / (np.max(sc_map_cls_i) - np.min(sc_map_cls_i) + 1e-10)
-            sc_map_cls_i = cv2.resize(sc_map_cls_i, dsize=(crop_size, crop_size))  # (14,14) => ori image size
+            sc_map_cls_i = cv2.resize(sc_map_cls_i, dsize=(crop_size, crop_size))
             sc_map_cls = np.maximum(sc_map_cls, sc_map_cls_i)
 
         maxk_maps.append(sc_map_cls.copy())
@@ -198,7 +198,7 @@ def get_topk_boxes_scg_v2(cls_inds, top_cams, sc_maps, crop_size, topk=(1, 5), g
             if max_box is None:
                 max_box = (0, 0, 0, 0)
             if gt_labels is not None:
-                max_box = (int(gt_labels[0]),) + max_box
+                max_box = (int(gt_labels),) + max_box
             else:
                 max_box = (cls_inds[i],) + max_box
             maxk_boxes.append(max_box)
@@ -215,11 +215,9 @@ def get_topk_boxes_scg_v2(cls_inds, top_cams, sc_maps, crop_size, topk=(1, 5), g
     return result, maxk_maps
 
 
-def get_topk_boxes_hier_scg(logits, top_cams, sc_maps, im_file, topk=(1,), gt_labels=None, threshold=0.2,
-                            mode='union', fg_th=0.1, bg_th=0.05, sc_maps_fo=None):
-    logits = logits.data.cpu().numpy()  # 200
-    maxk = max(topk)  # 5
-    species_cls = np.argsort(logits)[::-1][:maxk]  # top_k's idx
+def get_topk_boxes_hier_scg(cls_inds, top_cams, sc_maps, crop_size, topk=(1, 5), gt_labels=None, threshold=0.2,
+                            mode='union', fg_th=0.1, bg_th=0.2, sc_maps_fo=None):
+
     if isinstance(sc_maps, tuple) or isinstance(sc_maps, list):
         pass
     else:
@@ -229,12 +227,10 @@ def get_topk_boxes_hier_scg(logits, top_cams, sc_maps, im_file, topk=(1,), gt_la
             pass
         else:
             sc_maps_fo = [sc_maps_fo]
-    # get original image size and scale
-    im = cv2.imread(im_file)
-    h, w, _ = np.shape(im)
+
     maxk_boxes = []
     maxk_maps = []
-    for i in range(maxk):
+    for i in range(max(topk)):
         sc_map_cls = 0
         for j, sc_map in enumerate(sc_maps):
             # shape of sc_map:(1,196,196)
@@ -281,7 +277,7 @@ def get_topk_boxes_hier_scg(logits, top_cams, sc_maps, im_file, topk=(1,), gt_la
             sc_map_cls_i = sc_map_sel_pos - sc_map_sel_neg
             sc_map_cls_i = sc_map_cls_i * (sc_map_cls_i >= 0)
             sc_map_cls_i = (sc_map_cls_i - np.min(sc_map_cls_i)) / (np.max(sc_map_cls_i) - np.min(sc_map_cls_i) + 1e-10)
-            sc_map_cls_i = cv2.resize(sc_map_cls_i, dsize=(w, h))  # (14,14) => ori image size
+            sc_map_cls_i = cv2.resize(sc_map_cls_i, dsize=(crop_size, crop_size))
             sc_map_cls = np.maximum(sc_map_cls, sc_map_cls_i)
 
         maxk_maps.append(sc_map_cls.copy())
@@ -302,16 +298,16 @@ def get_topk_boxes_hier_scg(logits, top_cams, sc_maps, im_file, topk=(1,), gt_la
             if max_box is None:
                 max_box = (0, 0, 0, 0)
             if gt_labels is not None:
-                max_box = (int(gt_labels[0]),) + max_box
+                max_box = (int(gt_labels),) + max_box
             else:
-                max_box = (species_cls[i],) + max_box
+                max_box = (cls_inds[i],) + max_box
             maxk_boxes.append(max_box)
         elif mode == 'union':
             box = extract_bbox_from_map(fg_map)
             if gt_labels is not None:
-                maxk_boxes.append((int(gt_labels[0]),) + box)
+                maxk_boxes.append((int(gt_labels),) + box)
             else:
-                maxk_boxes.append((species_cls[i],) + box)
+                maxk_boxes.append((cls_inds[i],) + box)
         else:
             raise KeyError('invalid mode! Please set the mode in [\'max\', \'union\']')
 
