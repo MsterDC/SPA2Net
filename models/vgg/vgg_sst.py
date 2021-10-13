@@ -182,6 +182,15 @@ class VGG(nn.Module):
         norm_feat = norm_feat.view(n, fh, fw)
         return norm_feat
 
+    def max_normalize(self, feat):
+        pass
+
+    def pas_normalize(self, feat):
+        pass
+
+    def ivr_normalize(self, feat):
+        pass
+
 
 
     def get_scm(self, logits, gt_label, sc_maps_fo, sc_maps_so):
