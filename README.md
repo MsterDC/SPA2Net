@@ -6,7 +6,7 @@ PyTorch implementation for Self-Supervised Attention (SSA).
 
 ## :gear: Quick Start: Train & Test
 
-### Download fine-tuned classification model
+### Download fine-tuned classification model for training on `ILSVRC`.
 * [BaiduNetdisk](https://pan.baidu.com/s/1-bsNxmqaheHW72umm408uA) code：6ih2 
 * [GoogleDrive](https://drive.google.com/file/d/1BXrgBA09eGZ3UvtFJYYm3FfPDScKA5-g/view?usp=sharing)
 * After downloading, put the model into `snapshots/ilsvrc/vgg16_spa_#1/`
