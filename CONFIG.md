@@ -2,6 +2,8 @@
 
 This document contains detailed configuration for parameters using in training and testing.
 
+## 🔥 Update: [Repair Function] Parameter `--debug` can be used to visualize the localization result.
+
 ## :deciduous_tree: Train
 * --snapshot_dir: prefixes: `../snapshots/ilsvrc/` for `ILSVRC` and `../snapshots/` for `CUB`, and the following format is recommended: `Base_Mode_#ExpNumber`, such as `../snapshots/ilsvrc/vgg16_sos+sa_v3_#1`.
 * --log_dir: prefixes: `../log/ilsvrc/` for `ILSVRC` and `../log/` for `CUB`, and the following dir name is the same as `snapshot_dir`, such as `../log/ilsvrc/vgg16_sos+sa_v3_#1`.
@@ -69,4 +71,4 @@ where 'other' refers to the parameters of the `backbone` (such as vgg16) ,'cls' 
 * --sa_head: need to align with the settings during training, default is `8`.
 * --sa_neu_num: need to align with the settings during training, default is `512` for VGG16.
 * --mode: need to align with the settings during training, default is `sos+sa_v3`.
-* --debug: it is not supported for quick version script now, it will be fixed later.
+* --debug: it is supported for quick version script now! (Repaired Date:2021.10.13, 16:00)
