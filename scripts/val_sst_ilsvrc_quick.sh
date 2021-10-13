@@ -34,4 +34,4 @@ python val_sst_quick.py \
     --sa_head=8 \
     --sa_neu_num=512 \
     --mode=spa \
-#    --debug \
+    --debug \
