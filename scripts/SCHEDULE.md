@@ -1,9 +1,9 @@
-## 🔥 Next Training Task (Updating...)
-* New Training Task Name: `vgg16_sos+sa_v3_wp_#15`
-* Status: `Waiting for execution`
-* Update Date: `2021.10.10 16:00, Sunday` Updated by `Kevin`
+## 🔥 New Release Task
+* New Training Task Name: `None`
+* Status: `Stop execution`
+* Update Date: `2021.10.14 14:26` Updated by `Kevin`
 * Updated Files: `exper/train_sst.py` / `scripts/train_sst_ilsvrc.sh` / `scripts/val_sst_ilsvrc_quick.sh` .
-* Note: Once the suffix of field `snapshots_dir` in script is the same as `New Training Task Name`, that means the corresponding configuration has been updated !
+* Note: Once the suffix of field `snapshots_dir` in script is the same as `New Training Task Name`, that means the corresponding configuration has been updated, otherwise stopping training !
 
 
 ## 🍎 Tips
