@@ -24,8 +24,8 @@ python train_sst.py \
     --hinge_m=1 \
     --hinge_lr=0.00005 \
     --hinge_loss_weight=1 \
-    --snapshot_dir=../snapshots/vgg16_sos+sa_v3_#28 \
-    --log_dir=../log/vgg16_sos+sa_v3_#28 \
+    --snapshot_dir=../snapshots/vgg16_sos+sa_v3_#29 \
+    --log_dir=../log/vgg16_sos+sa_v3_#29 \
     --epoch=150 \
     --decay_points=none \
     --load_finetune=False \
@@ -62,6 +62,8 @@ python train_sst.py \
     --ram_start=20 \
     --ra_loss_weight=1 \
     --ram \
+    --norm_fun=norm_max \
+    --percentile=45 \
 
 
 #    --rcst_lr=0.000005 \

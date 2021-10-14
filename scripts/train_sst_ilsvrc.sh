@@ -24,22 +24,22 @@ python train_sst.py \
     --scg_so_weight=1 \
     --scg_order=2 \
     --scg_blocks=4,5 \
-    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_wp_#15 \
-    --log_dir=../log/ilsvrc/vgg16_sos+sa_v3_wp_#15 \
+    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_#27 \
+    --log_dir=../log/ilsvrc/vgg16_sos+sa_v3_#27 \
     --batch_size=64 \
     --gpus=0,1,2,3 \
     --lr=0.001 \
     --warmup=True \
-    --epoch=17 \
-    --decay_point=10,15 \
+    --epoch=20 \
+    --decay_point=13,17 \
     --weight_decay=0.0005 \
-    --load_finetune=True \
-    --pretrained_model=ilsvrc_epoch_20.pth.tar \
-    --pretrained_model_dir=../snapshots/ilsvrc/vgg16_spa_#1 \
+    --load_finetune=False \
+    --pretrained_model=vgg16.pth \
+    --pretrained_model_dir=../pretrained_models \
     --resume=False \
     --restore_from=none \
     --ra_loss_weight=0.5 \
-    --ram_start=3 \
+    --ram_start=5 \
     --ram_th_bg=0.1 \
     --ram_bg_fg_gap=0.2 \
     --ram \
@@ -57,11 +57,13 @@ python train_sst.py \
     --sa_use_edge=True \
     --sa_edge_stage=4,5 \
     --sa_edge_weight=1 \
-    --sa_start=3 \
+    --sa_start=5 \
     --sa_head=8 \
     --sa_neu_num=512 \
     --watch_cam \
     --mode=sos+sa_v3 \
+    --norm_fun=norm_min_max \
+    --percentile=45 \
 
 
 # mode = spa / sos / spa+sa / sos+sa_v1 / sos+sa_v2 / sos+sa_v3
