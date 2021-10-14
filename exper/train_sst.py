@@ -55,10 +55,9 @@ def train(args):
     # set warmup params
     if args.warmup == 'True':
         if args.dataset == 'ilsvrc':
-            wp_period = [2,6]
-            wp_node = [0,3]
-            wp_ps = [['sos_weight', 'sos_bias'],
-                     ['sa_weight', 'sa_bias']]
+            wp_period = [4]
+            wp_node = [5]
+            wp_ps = [['sa_weight', 'sa_bias', 'other_weight', 'other_bias', 'cls_weight', 'cls_bias']]
         elif args.dataset == 'cub':
             wp_period = [9, 4, 5, 9]
             wp_node = [0, 10, 25, 31]
