@@ -11,6 +11,7 @@ import os
 from utils.vistools import norm_for_batch_map
 from .sa import ScaledDotProductAttention
 from .thr_avg_pool import ThresholdedAvgPool2d
+from utils.vistools_quick import NormalizationFamily
 
 __all__ = [
     'VGG', 'vgg11', 'vgg11_bn', 'vgg13', 'vgg13_bn', 'vgg16', 'vgg16_bn',
@@ -37,6 +38,7 @@ class VGG(nn.Module):
         self.conv4 = nn.Sequential(*features[cnvs[1]:cnvs[2]])
         self.conv5 = nn.Sequential(*features[cnvs[2]:-1])
         self.num_classes = num_classes
+        self.normalize = NormalizationFamily()
         self.args = args
 
         self.cls = nn.Sequential(
@@ -126,7 +128,13 @@ class VGG(nn.Module):
         n, _, _, _ = logits.size()
         cls_logits = F.softmax(logits, dim=1)
         var_logits = torch.var(cls_logits, dim=1)
-        norm_var_logits = self.normalize_feat(var_logits)  # (n, w, h)
+
+        # using different norm function
+        norm_fun = self.args.norm_fun + '_batch'
+        norm_var_logits = self.normalize(norm_fun, var_logits, self.args.percentile)
+        norm_var_logits = norm_var_logits.to(self.args.device)
+        # norm_var_logits = self.normalize_feat(var_logits)  # (n, w, h)
+
         bg_mask = (norm_var_logits < th_bg).float()
         fg_mask = (norm_var_logits > (th_bg + bg_fg_gap)).float()
         cls_map = logits[torch.arange(n), label.long(), ...]
@@ -171,8 +179,6 @@ class VGG(nn.Module):
         non_local_cos_ho[non_local_cos_ho < so_th] = 0
         return non_local_cos_fo, non_local_cos_ho
 
-
-
     def normalize_feat(self, feat):
         n, fh, fw = feat.size()
         feat = feat.view(n, -1)
@@ -182,24 +188,18 @@ class VGG(nn.Module):
         norm_feat = norm_feat.view(n, fh, fw)
         return norm_feat
 
-    def max_normalize(self, feat):
-        pass
-
-    def pas_normalize(self, feat):
-        pass
-
-    def ivr_normalize(self, feat):
-        pass
-
-
-
     def get_scm(self, logits, gt_label, sc_maps_fo, sc_maps_so):
         # get cam
         loc_map = F.relu(logits)
         cam_map = loc_map.data.cpu().numpy()
         # gt_label: (n, )
         cam_map_ = cam_map[torch.arange(cam_map.shape[0]), gt_label.data.cpu().numpy().astype(int), :, :]  # (bs, w, h)
-        cam_map_cls = norm_for_batch_map(cam_map_)  # (64,14,14)
+
+        # using different norm function
+        norm_fun = self.args.norm_fun + '_batch'
+        cam_map_cls = self.normalize(norm_fun, cam_map_, self.args.percentile)
+        # cam_map_cls = norm_for_batch_map(cam_map_)  # (64,14,14)
+
         # using fo/so and diff stage feature to get fused scm.
         sc_maps = []
         if self.args.scg_com:
@@ -210,6 +210,7 @@ class VGG(nn.Module):
                     sc_map_i = sc_map_i / (torch.sum(sc_map_i, dim=1, keepdim=True) + 1e-10)
                     sc_maps.append(sc_map_i)
         sc_com = sc_maps[-2] + sc_maps[-1]
+
         # weighted sum for scm and cam
         sc_map = sc_com.squeeze().data.cpu().numpy()  # (64,196,196)
         wh_sc, bz = sc_map.shape[1], sc_map.shape[0]
@@ -218,8 +219,12 @@ class VGG(nn.Module):
         cam_sc_dot = torch.bmm(torch.from_numpy(cam_map_seg), torch.from_numpy(sc_map))  # (64,1,196)
         cam_sc_map = cam_sc_dot.reshape(bz, w_sc, h_sc)  # (64,14,14)
         sc_map_cls_i = torch.where(cam_sc_map >= 0, cam_sc_map, torch.zeros_like(cam_sc_map))
-        sc_map_cls_i = (sc_map_cls_i - torch.min(sc_map_cls_i)) / (
-                torch.max(sc_map_cls_i) - torch.min(sc_map_cls_i) + 1e-10)
+
+        # using different norm function
+        sc_map_cls_i = self.normalize(norm_fun, sc_map_cls_i, self.args.percentile)
+        # sc_map_cls_i = (sc_map_cls_i - torch.min(sc_map_cls_i)) / (
+        #         torch.max(sc_map_cls_i) - torch.min(sc_map_cls_i) + 1e-10)
+
         gt_scm = torch.where(sc_map_cls_i > 0, sc_map_cls_i, torch.zeros_like(sc_map_cls_i))
         # segment fg/bg for scm or not.
         gt_scm = self.get_masked_pseudo_gt(gt_scm, self.args.sos_fg_th, self.args.sos_bg_th,
