@@ -2,7 +2,8 @@
 
 This document contains detailed configuration for parameters using in training and testing.
 
-### 🔥 Update: [Repair Function] Parameter `--debug` can be used to visualize the localization result.
+* 🔥 Update: [Adding Function] Parameter `--norm_fun` specify different normalizing function and `--percentile` specify percentile value for `Pas` or `IVR`.
+* 🔥 Update: [Repairing Function] Parameter `--debug` can be used to visualize the localization result.
 
 ## :deciduous_tree: Train
 * --snapshot_dir: prefixes: `../snapshots/ilsvrc/` for `ILSVRC` and `../snapshots/` for `CUB`, and the following format is recommended: `Base_Mode_#ExpNumber`, such as `../snapshots/ilsvrc/vgg16_sos+sa_v3_#1`.
@@ -34,10 +35,14 @@ This document contains detailed configuration for parameters using in training a
 * --sa_start: epoch to add SA module for training, default is `20` on CUB, `3` on ILSVRC.
 * --sa_head: the number of multi-heads of SA module, default is `8`.
 * --sa_neu_num: channel number of SA module. Default is `512` in `VGG16`.
+* --norm_fun: default is `norm_min_max`, imp for different normalize function, includes:
+```shell
+ 'norm_max(_batch)' / 'norm_min_max(_batch)'(default) / 'norm_pas(_batch)' / 'norm_ivr(_batch)'
+```
 * --watch_cam: save CAM, sos_map and gt_sos_map during training. The specific visualized image is set in exper/train_sst.py, and the default setting is '`True`'.
 * --mode: current code support modes include: 
 ```shell
-'spa' / 'sos' / 'spa+sa' / 'sos+sa_v1' / 'sos+sa_v2' / 'sos+sa_v3' (defalut)
+'spa' / 'sos' / 'spa+sa' / 'sos+sa_v1' / 'sos+sa_v2' / 'sos+sa_v3' (default)
 ```
 
 ### :books: Explanation of Warmup in the code
