@@ -996,27 +996,6 @@ def norm_atten_map(attention_map):
     return atten_norm
 
 
-def norm_max(fm):
-    max_val = np.max(fm)
-    norm_map = fm / max_val
-    return norm_map
-
-
-def norm_pas(fm, percentile):
-    min_val = np.min(fm)
-    d_F_min = fm - min_val
-    p_fm = np.percentile(d_F_min, q=percentile)
-    normed_fm = d_F_min / p_fm
-    return normed_fm
-
-
-def norm_ivr(fm, percentile):
-    p_fm = np.percentile(fm, q=percentile)
-    d_F_p = fm - p_fm
-    normed_fm = d_F_p / np.max(d_F_p)
-    return normed_fm
-
-
 def norm_for_batch_map(scm):
     b, w, h = scm.shape
     attention_map = scm.reshape(b, -1)  # (n，w*h)

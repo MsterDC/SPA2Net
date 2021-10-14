@@ -98,6 +98,9 @@ class opts(object):
         self.parser.add_argument("--sa_head", type=float, default=1, help='number of SA heads')
         self.parser.add_argument("--sa_neu_num", type=float, default=512, help='size of SA linear input')
 
+        self.parser.add_argument("--percentile", type=int, default=45, help='percentile value for normalization.')
+        self.parser.add_argument("--norm_fun", type=str, default='norm_min_max', help='norm_max(_batch) / norm_min_max(_batch) / norm_pas(_batch) / norm_ivr(_batch)')
+
         self.parser.add_argument("--warmup", type=str, default='False', help='switch use warmup training strategy.')
         self.parser.add_argument("--mode", type=str, default='sos+sa', help='spa/spa+hinge/sos/spa+sa/sos+sa/mc_sos')
         self.parser.add_argument("--watch_cam", action='store_true', help='save cam each iteration')

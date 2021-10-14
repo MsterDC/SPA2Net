@@ -7,87 +7,141 @@ import random
 
 class NormalizationFamily:
 
-    def __init__(self, fm, norm_fun, percentile=None):
-        """ @ Author: Kevin
-        Different Normalization and NormalizationWithBatch imp by DongChen.
-        :param fm: [type:numpy.array] input map need to be normalized
-        :param norm_fun: [type:String] normalize function name
-        :param percentile: (op [type:int]) percentile number
-        """
-        self.fm = fm
-        self.percentile = percentile
-        self.norm_fun = 'self.' + norm_fun
+    def __call__(self, norm_fun, *args):
+        norm_fun = 'self.' + norm_fun
+        return eval(norm_fun)(*args)
 
-    def __call__(self):
-        return eval(self.norm_fun)()
+    @staticmethod
+    def norm_min_max(*args):
+        fm = None
+        if isinstance(args[0], torch.Tensor):
+            fm = args[0].data.cpu().numpy()
+        if isinstance(args[0], np.ndarray):
+            fm = args[0]
+        min_val = np.min(fm)
+        max_val = np.max(fm)
+        normed_fm = (fm - min_val) / (max_val - min_val + 1e-10)
+        if isinstance(args[0], torch.Tensor):
+            normed_fm = torch.from_numpy(normed_fm)
+        return normed_fm
 
-    def norm_min_max(self):
-        min_val = np.min(self.fm)
-        max_val = np.max(self.fm)
-        atten_norm = (self.fm - min_val) / (max_val - min_val + 1e-10)
-        return atten_norm
-
-    def norm_min_max_batch(self):
-        b, w, h = self.fm.shape
-        flatten_map = self.fm.reshape(b, -1)  # (n，w*h)
+    @staticmethod
+    def norm_min_max_batch(*args):
+        fm = None
+        if isinstance(args[0], torch.Tensor):
+            fm = args[0].data.cpu().numpy()
+        if isinstance(args[0], np.ndarray):
+            fm = args[0]
+        b, w, h = fm.shape
+        flatten_map = fm.reshape(b, -1)  # (n，w*h)
         min_val = np.min(flatten_map, axis=1)  # (n,)
         min_val = np.expand_dims(np.expand_dims(min_val, axis=1), axis=2)  # (n,1,1)
         max_val = np.max(flatten_map, axis=1)  # (n,)
         max_val = np.expand_dims(np.expand_dims(max_val, axis=1), axis=2)  # (n,1,1)
-        normed_map = (self.fm - min_val) / (max_val - min_val + 1e-10)  # (n,w,h)
+        normed_map = (fm - min_val) / (max_val - min_val + 1e-10)  # (n,w,h)
+        if isinstance(args[0], torch.Tensor):
+            normed_map = torch.from_numpy(normed_map)
         return normed_map
 
-    def norm_max(self):
-        max_val = np.max(self.fm)
-        norm_map = self.fm / max_val
+    @staticmethod
+    def norm_max(*args):
+        fm = None
+        if isinstance(args[0], torch.Tensor):
+            fm = args[0].data.cpu().numpy()
+        if isinstance(args[0], np.ndarray):
+            fm = args[0]
+        max_val = np.max(fm)
+        norm_map = fm / max_val
+        if isinstance(args[0], torch.Tensor):
+            norm_map = torch.from_numpy(norm_map)
         return norm_map
 
-    def norm_max_batch(self):
-        b, w, h = self.fm.shape
-        flatten_map = self.fm.reshape(b, -1)
+    @staticmethod
+    def norm_max_batch(*args):
+        fm = None
+        if isinstance(args[0], torch.Tensor):
+            fm = args[0].data.cpu().numpy()
+        if isinstance(args[0], np.ndarray):
+            fm = args[0]
+        b, w, h = fm.shape
+        flatten_map = fm.reshape(b, -1)
         max_val = np.max(flatten_map, axis=1)
         max_val = np.expand_dims(np.expand_dims(max_val, axis=1), axis=2)
-        normed_map = self.fm / max_val
+        normed_map = fm / max_val
+        if isinstance(args[0], torch.Tensor):
+            normed_map = torch.from_numpy(normed_map)
         return normed_map
 
-    def norm_pas(self):
+    @staticmethod
+    def norm_pas(*args):
         """ @ author: Kevin
         Imp of 'Rethinking class activation mapping for weakly supervised object localization', ECCV 2020
         """
-        min_val = np.min(self.fm)
-        d_F_min = self.fm - min_val
-        p_fm = np.percentile(d_F_min, q=self.percentile)
+        fm = None
+        if isinstance(args[0], torch.Tensor):
+            fm = args[0].data.cpu().numpy()
+        if isinstance(args[0], np.ndarray):
+            fm = args[0]
+        min_val = np.min(fm)
+        d_F_min = fm - min_val
+        p_fm = np.percentile(d_F_min, q=args[1])
         normed_fm = d_F_min / p_fm
+        if isinstance(args[0], torch.Tensor):
+            normed_fm = torch.from_numpy(normed_fm)
         return normed_fm
 
-    def norm_pas_batch(self):
-        b, w, h = self.fm.shape
-        flatten_map = self.fm.reshape(b, -1)
+    @staticmethod
+    def norm_pas_batch(*args):
+        fm = None
+        if isinstance(args[0], torch.Tensor):
+            fm = args[0].data.cpu().numpy()
+        if isinstance(args[0], np.ndarray):
+            fm = args[0]
+        b, w, h = fm.shape
+        flatten_map = fm.reshape(b, -1)
         min_val = np.min(flatten_map, axis=1)  # (n,)
         min_val = np.expand_dims(np.expand_dims(min_val, axis=1), axis=2)  # (n,1,1)
-        d_F_min = self.fm - min_val
+        d_F_min = fm - min_val
         p_df = d_F_min.reshape(b, -1)  # (n,wh)
-        p_fm = np.expand_dims(np.percentile(p_df, q=self.percentile, axis=1), axis=1)  # (n,1)
+        p_fm = np.expand_dims(np.percentile(p_df, q=args[1], axis=1), axis=1)  # (n,1)
         normed_map = p_df / p_fm  # (n, wh)
         normed_map = normed_map.reshape(b, w, h)
+        if isinstance(args[0], torch.Tensor):
+            normed_map = torch.from_numpy(normed_map)
         return normed_map
 
-    def norm_ivr(self):
+    @staticmethod
+    def norm_ivr(*args):
         """ @ author: Kevin
         Imp of 'Normalization Matters in Weakly Supervised Object Localization', ICCV 2021
         """
-        p_fm = np.percentile(self.fm, q=100-self.percentile)
-        d_F_p = self.fm - p_fm
+        fm = None
+        if isinstance(args[0], torch.Tensor):
+            fm = args[0].data.cpu().numpy()
+        if isinstance(args[0], np.ndarray):
+            fm = args[0]
+        p_fm = np.percentile(fm, q=100-args[1])
+        d_F_p = fm - p_fm
         normed_fm = d_F_p / np.max(d_F_p)
+        if isinstance(args[0], torch.Tensor):
+            normed_fm = torch.from_numpy(normed_fm)
         return normed_fm
 
-    def norm_ivr_batch(self):
-        b, w, h = self.fm.shape
-        flatten_map = self.fm.reshape(b, -1)
-        p_fm = np.expand_dims(np.expand_dims(np.percentile(flatten_map, q=100-self.percentile, axis=1), axis=1), axis=2)
-        d_F_p = self.fm - p_fm  # (n,w,h)
+    @staticmethod
+    def norm_ivr_batch(*args):
+        fm = None
+        if isinstance(args[0], torch.Tensor):
+            fm = args[0].data.cpu().numpy()
+        if isinstance(args[0], np.ndarray):
+            fm = args[0]
+        b, w, h = fm.shape
+        flatten_map = fm.reshape(b, -1)
+        p_fm = np.expand_dims(np.expand_dims(np.percentile(flatten_map, q=100-args[1], axis=1), axis=1), axis=2)
+        d_F_p = fm - p_fm  # (n,w,h)
         max_val = np.expand_dims(np.expand_dims(np.max(d_F_p.reshape(b, -1), axis=1), axis=1), axis=2)
         normed_fm = d_F_p / max_val
+        if isinstance(args[0], torch.Tensor):
+            normed_fm = torch.from_numpy(normed_fm)
         return normed_fm
 
 
@@ -289,7 +343,7 @@ def save_sim_heatmap_box(im_file, top_maps, save_dir, gt_label=None, sim_map=Non
     cv2.imwrite(os.path.join(save_dir, save_name), final_to_save)
 
 
-def save_im_sim(im_file, aff_maps, save_dir, suffix='', gt_label=None, epoch=100):
+def save_im_sim(args, im_file, aff_maps, save_dir, suffix='', gt_label=None, epoch=100):
     if isinstance(aff_maps, tuple) or isinstance(aff_maps, list):
         pass
     else:
@@ -329,7 +383,11 @@ def save_im_sim(im_file, aff_maps, save_dir, suffix='', gt_label=None, epoch=100
             h_aff, w_aff = int(np.sqrt(h_w_aff)), int(np.sqrt(h_w_aff))
             h_aff_i, w_aff_i = int(point[0] * h_aff / h), int(point[1] * w_aff / w)
             aff_map_i = aff_i[:, h_aff_i * w_aff + w_aff_i].reshape(h_aff, w_aff)
-            aff_map_i = (aff_map_i - np.min(aff_map_i)) / (np.max(aff_map_i) - np.min(aff_map_i) + 1e-10)
+
+            norm_fun = NormalizationFamily()
+            aff_map_i = norm_fun(args.norm_fun, aff_map_i, args.percentile)
+            # aff_map_i = (aff_map_i - np.min(aff_map_i)) / (np.max(aff_map_i) - np.min(aff_map_i) + 1e-10)
+
             aff_map_i = cv2.resize(aff_map_i, dsize=(w, h))
             aff_map_i = cv2.applyColorMap(np.uint8(255 * aff_map_i), cv2.COLORMAP_JET)
 

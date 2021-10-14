@@ -73,6 +73,8 @@ class opts(object):
         self.parser.add_argument("--sos_seg_method", type=str, default='TC', help='BC / TC')
         self.parser.add_argument("--sos_loss_method", type=str, default='BCE', help='BCE / MSE')
         self.parser.add_argument("--scg_version", type=str, default='v2', help='v1 / v2')
+        self.parser.add_argument("--norm_fun", type=str, default='norm_min_max', help='norm_min_max(_batch) / norm_max(_batch) / norm_pas(_batch) / norm_ivr(_batch)')
+        self.parser.add_argument("--percentile", type=int, default=45, help='percentile value for normalization.')
         self.parser.add_argument("--debug", action='store_true', help='.')
         self.parser.add_argument("--mode", type=str, default='sos+sa')
 
@@ -94,7 +96,7 @@ def get_model(args):
     return model
 
 
-def eval_loc(cls_logits, cls_map, label, gt_boxes, crop_size, topk=5, threshold=None, mode='union', iou_th=0.5):
+def eval_loc(args, cls_logits, cls_map, label, gt_boxes, crop_size, topk=5, threshold=None, mode='union', iou_th=0.5):
     """
     @ written by Kevin
     :param cls_logits: (20, 200)
@@ -117,7 +119,7 @@ def eval_loc(cls_logits, cls_map, label, gt_boxes, crop_size, topk=5, threshold=
 
     batch = cls_logits.shape[0]
     for ind in range(batch):
-        top_boxes, top_maps, gt_known_box, gt_known_map = get_topk_boxes_hier(topk_idx[ind], cls_map[ind],
+        top_boxes, top_maps, gt_known_box, gt_known_map = get_topk_boxes_hier(args, topk_idx[ind], cls_map[ind],
                                                                               label[ind], crop_size=crop_size,
                                                                               threshold=threshold,
                                                                               mode=mode)
@@ -180,7 +182,7 @@ def eval_loc_sos(args, cls_logits, pred_scm, label, gt_boxes, topk=5, threshold=
            top_maps_batch, top5_boxes_batch, top1_wrong_detail_batch
 
 
-def eval_loc_scg_v2(cls_logits, top_cams, gt_known_cams, aff_maps, label, gt_boxes, crop_size,
+def eval_loc_scg_v2(args, cls_logits, top_cams, gt_known_cams, aff_maps, label, gt_boxes, crop_size,
                     topk=(1, 5), threshold=None, mode='union', iou_th=0.5, sc_maps_fo=None):
     _, topk_idx = cls_logits.topk(topk, 1, True, True)
     topk_idx = topk_idx.tolist()
@@ -194,7 +196,7 @@ def eval_loc_scg_v2(cls_logits, top_cams, gt_known_cams, aff_maps, label, gt_box
 
     batch = cls_logits.shape[0]
     for ind in range(batch):
-        top_boxes, top_maps = get_topk_boxes_scg_v2(topk_idx[ind], top_cams[ind], aff_maps[ind], crop_size=crop_size,
+        top_boxes, top_maps = get_topk_boxes_scg_v2(args, topk_idx[ind], top_cams[ind], aff_maps[ind], crop_size=crop_size,
                                                     threshold=threshold, mode=mode, sc_maps_fo=sc_maps_fo)
         top1_box, top5_boxes = top_boxes
         # update result record
@@ -202,7 +204,7 @@ def eval_loc_scg_v2(cls_logits, top_cams, gt_known_cams, aff_maps, label, gt_box
         (locerr_1, locerr_5), top1_wrong_detail = evaluate_quick.locerr((top1_box, top5_boxes), label[ind],
                                                                         gt_bbox_ind, topk=(1, 5), iou_th=iou_th)
         # gt-known bbox evaluate
-        gt_known_boxes, gt_known_maps = get_topk_boxes_scg_v2(topk_idx[ind], gt_known_cams[ind], aff_maps[ind],
+        gt_known_boxes, gt_known_maps = get_topk_boxes_scg_v2(args, topk_idx[ind], gt_known_cams[ind], aff_maps[ind],
                                                               crop_size=crop_size, topk=(1,), threshold=threshold,
                                                               mode=mode, gt_labels=label[ind], sc_maps_fo=sc_maps_fo)
         # update result record
@@ -347,7 +349,7 @@ def eval_loc_all(args, loc_params):
     for th in args.threshold:
 
         locerr_1, locerr_5, gt_known_locerr, top_maps, top5_boxes, gt_known_maps, top1_wrong_detail = \
-            eval_loc(cls_logits, loc_map, label_in, gt_boxes, crop_size=args.crop_size, topk=5,
+            eval_loc(args, cls_logits, loc_map, label_in, gt_boxes, crop_size=args.crop_size, topk=5,
                      threshold=th, mode='union', iou_th=args.iou_th)
 
         # record CAM localization error
@@ -393,7 +395,7 @@ def eval_loc_all(args, loc_params):
                              fg_th=0.1, bg_th=0.05, iou_th=args.iou_th, sc_maps_fo=None)
         if args.scg_version == 'v2':
             locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
-                eval_loc_scg_v2(cls_logits, top_maps, gt_known_maps, sc_maps[-2] + sc_maps[-1], label_in,
+                eval_loc_scg_v2(args, cls_logits, top_maps, gt_known_maps, sc_maps[-2] + sc_maps[-1], label_in,
                                 gt_boxes, crop_size=args.crop_size, topk=5, threshold=th, mode='union',
                                 iou_th=args.iou_th, sc_maps_fo=None)
 
