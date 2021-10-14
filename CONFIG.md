@@ -2,7 +2,7 @@
 
 This document contains detailed configuration for parameters using in training and testing.
 
-* 🔥 Update: [Adding Function] Parameter `--norm_fun` specify different normalizing function and `--percentile` specify percentile value for `Pas` or `IVR`.
+* 🔥 Update: [Adding Function] Parameter `--norm_fun` specify different normalizing function and `--percentile` specify percentile value for [Pas](https://www.ecva.net/papers/eccv_2020/papers_ECCV/papers/123600613.pdf) or [IVR](https://arxiv.org/abs/2107.13221).
 * 🔥 Update: [Repairing Function] Parameter `--debug` can be used to visualize the localization result.
 
 ## :deciduous_tree: Train
