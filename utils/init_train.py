@@ -11,20 +11,23 @@ from torch import optim
 import torch.nn.functional as F
 import torch.backends.cuda as cudnn
 
-from utils import AverageMeter, MoveAverageMeter
+from utils import AverageMeter
+from utils.scheduler import GradualWarmupScheduler
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from models import *
 
 
 # default settings
 ROOT_DIR = os.getcwd()
 LR = 0.001
+CLS_LR = 0.01
 EPOCH = 21
 DISP_INTERVAL = 20
 
 
 class opts(object):
     def __init__(self):
-        self.parser = argparse.ArgumentParser(description='TPAMI2022-SST')
+        self.parser = argparse.ArgumentParser(description='SPA-Net')
         self.parser.add_argument("--root_dir", type=str, default=ROOT_DIR, help='Root dir for the project')
         self.parser.add_argument("--img_dir", type=str, default='', help='Directory of training images')
         self.parser.add_argument("--vis_name", type=str, default='')
@@ -43,17 +46,19 @@ class opts(object):
         self.parser.add_argument("--global_counter", type=int, default=0)
         self.parser.add_argument("--current_epoch", type=int, default=0)
         self.parser.add_argument("--mixp", action='store_true', help='turn on amp training.')
+        self.parser.add_argument("--seed", default=None, type=int, help='seed for initializing training.')
+        self.parser.add_argument("--increase_lr", type=str, default='False', help='only used on ILSVRC for now.')
+        self.parser.add_argument("--increase_points", type=str, default='10', help='only used on ILSVRC for now.')
 
-        self.parser.add_argument("--seed", default=None, type=int, help='seed for initializing training. ')
-        self.parser.add_argument("--use_tap", type=str, default='False')
-        self.parser.add_argument("--tap_th", type=float, default=0.1, help='threshold avg pooling')
-        self.parser.add_argument("--tap_start", type=float, default=0)
-        self.parser.add_argument("--cls_or_hinge", type=str, default='cls')
-        self.parser.add_argument("--hinge_norm", type=str, default='softmax', help='norm/softmax')
-        self.parser.add_argument("--hinge_lr", type=float, default=0.001)
-        self.parser.add_argument("--hinge_loss_weight", type=float, default=0.1)
-        self.parser.add_argument("--hinge_p", type=float, default=1)
-        self.parser.add_argument("--hinge_m", type=float, default=0.9)
+        # self.parser.add_argument("--use_tap", type=str, default='False')
+        # self.parser.add_argument("--tap_th", type=float, default=0.1, help='threshold avg pooling')
+        # self.parser.add_argument("--tap_start", type=float, default=0)
+        # self.parser.add_argument("--cls_or_hinge", type=str, default='cls')
+        # self.parser.add_argument("--hinge_norm", type=str, default='softmax', help='norm/softmax')
+        # self.parser.add_argument("--hinge_lr", type=float, default=0.001)
+        # self.parser.add_argument("--hinge_loss_weight", type=float, default=0.1)
+        # self.parser.add_argument("--hinge_p", type=float, default=1)
+        # self.parser.add_argument("--hinge_m", type=float, default=0.9)
 
         self.parser.add_argument("--snapshot_dir", type=str, default='')
         self.parser.add_argument("--log_dir", type=str, default='../log')
@@ -64,16 +69,10 @@ class opts(object):
         self.parser.add_argument("--restore_from", type=str, default='')
         self.parser.add_argument("--gpus", type=str, default='0', help='-1 for cpu, split gpu id by comma')
         self.parser.add_argument("--batch_size", type=int, default=64)
-        self.parser.add_argument("--decay_points", type=str, default='80')
         self.parser.add_argument("--epoch", type=int, default=100)
-        self.parser.add_argument("--lr", type=float, default=LR)
-        self.parser.add_argument("--weight_decay", type=float, default=0.0005)
-
-        self.parser.add_argument("--ram", action='store_true', help='switch on restricted activation module.')
-        self.parser.add_argument("--ra_loss_weight", type=float, default=0.1, help='loss weight for the ra loss.')
-        self.parser.add_argument("--ram_start", type=float, default=10, help='the start epoch to introduce ra loss.')
-        self.parser.add_argument("--ram_th_bg", type=float, default=0.2, help='the variance threshold for back ground.')
-        self.parser.add_argument("--ram_bg_fg_gap", type=float, default=0.5, help='gap between fg & bg in ram.')
+        self.parser.add_argument("--decay_points", type=str, default='80', help='default 80 on CUB and 10,15 on ILSVRC.')
+        self.parser.add_argument("--warmup", type=str, default='False', help='switch use warmup training strategy.')
+        self.parser.add_argument("--warmup_fun", type=str, default='gra', help='gra / cos')
 
         self.parser.add_argument("--scg_blocks", type=str, default='2,3,4,5', help='2 for feat2, etc.')
         self.parser.add_argument("--scg_fosc_th", type=float, default=0.2)
@@ -82,7 +81,17 @@ class opts(object):
         self.parser.add_argument("--scg_so_weight", type=float, default=1)
         self.parser.add_argument("--scg_com", action='store_true', help='switch on second order supervised.')
 
+        self.parser.add_argument("--lr", type=float, default=LR)
+        self.parser.add_argument("--cls_lr", type=float, default=CLS_LR)
         self.parser.add_argument("--sos_lr", type=float, default=0.001)
+        self.parser.add_argument("--sa_lr", type=float, default=0.001)
+
+        self.parser.add_argument("--ram", action='store_true', help='switch on restricted activation module.')
+        self.parser.add_argument("--ra_loss_weight", type=float, default=0.1, help='loss weight for the ra loss.')
+        self.parser.add_argument("--ram_start", type=float, default=10, help='the start epoch to introduce ra loss.')
+        self.parser.add_argument("--ram_th_bg", type=float, default=0.2, help='the variance threshold for back ground.')
+        self.parser.add_argument("--ram_bg_fg_gap", type=float, default=0.5, help='gap between fg & bg in ram.')
+
         self.parser.add_argument("--sos_gt_seg", type=str, default='True', help='True / False')
         self.parser.add_argument("--sos_seg_method", type=str, default='BC', help='BC / TC')
         self.parser.add_argument("--sos_loss_method", type=str, default='BCE', help='BCE / MSE')
@@ -90,7 +99,7 @@ class opts(object):
         self.parser.add_argument("--sos_bg_th", type=float, default=0.01, help='segment pseudo gt scm')
         self.parser.add_argument("--sos_loss_weight", type=float, default=0.1, help='loss weight for the sos loss.')
         self.parser.add_argument("--sos_start", type=float, default=10, help='the start epoch to introduce sos.')
-        self.parser.add_argument("--sa_lr", type=float, default=0.001)
+
         self.parser.add_argument("--sa_use_edge", type=str, default='False', help='Add edge encoding or not')
         self.parser.add_argument("--sa_edge_weight", type=float, default=1)
         self.parser.add_argument("--sa_edge_stage", type=str, default='5', help='4 for feat4, etc.')
@@ -98,11 +107,13 @@ class opts(object):
         self.parser.add_argument("--sa_head", type=float, default=1, help='number of SA heads')
         self.parser.add_argument("--sa_neu_num", type=float, default=512, help='size of SA linear input')
 
-        self.parser.add_argument("--percentile", type=int, default=45, help='percentile value for normalization.')
-        self.parser.add_argument("--norm_fun", type=str, default='norm_min_max', help='norm_max(_batch) / norm_min_max(_batch) / norm_pas(_batch) / norm_ivr(_batch)')
+        # self.parser.add_argument("--percentile", type=int, default=45, help='percentile value for normalization.')
+        # self.parser.add_argument("--norm_fun", type=str, default='norm_min_max', help='norm_max(_batch) / norm_min_max(_batch) / norm_pas(_batch) / norm_ivr(_batch)')
+        self.parser.add_argument("--spa_loss", type=str, default='False', help='True or False for sparse loss of gt_scm.')
+        self.parser.add_argument("--spa_loss_weight", type=float, default=0.04, help='loss weight for sparse loss.')
+        self.parser.add_argument("--spa_loss_start", type=int, default=20, help='spa loss start point.')
 
-        self.parser.add_argument("--warmup", type=str, default='False', help='switch use warmup training strategy.')
-        self.parser.add_argument("--mode", type=str, default='sos+sa', help='spa/spa+hinge/sos/spa+sa/sos+sa/mc_sos')
+        self.parser.add_argument("--mode", type=str, default='sos+sa', help='spa/sos/spa+sa/sos+sa')
         self.parser.add_argument("--watch_cam", action='store_true', help='save cam each iteration')
 
         # self.parser.add_argument("--rcst_lr", type=float, default=0.005)
@@ -127,9 +138,10 @@ def get_model(args):
     model.to(args.device)
 
     lr = args.lr
+    cls_lr = args.cls_lr
     sos_lr = args.sos_lr if ('sos' in args.mode) else None
     sa_lr = args.sa_lr if 'sa' in args.mode else None
-    hg_lr = args.hinge_lr if 'hinge' in args.mode else None
+    # hg_lr = args.hinge_lr if 'hinge' in args.mode else None
 
     cls_layer = ['cls']
     cls_weight_list = []
@@ -143,9 +155,9 @@ def get_model(args):
     sa_weight_list = []
     sa_bias_list = []
 
-    hg_layer = ['hinge'] if 'hinge' in args.mode else []
-    hg_weight_list = []
-    hg_bias_list = []
+    # hg_layer = ['hinge'] if 'hinge' in args.mode else []
+    # hg_weight_list = []
+    # hg_bias_list = []
 
     other_weight_list = []
     other_bias_list = []
@@ -180,12 +192,12 @@ def get_model(args):
                 sa_weight_list.append(value)
             elif 'bias' in name:
                 sa_bias_list.append(value)
-        elif ('hinge' in args.mode) and hg_layer[0] in name:
-            print("hinge-layer's learning rate:", hg_lr*10, " => ", name)
-            if 'weight' in name:
-                hg_weight_list.append(value)
-            elif 'bias' in name:
-                hg_bias_list.append(value)
+        # elif ('hinge' in args.mode) and hg_layer[0] in name:
+        #     print("hinge-layer's learning rate:", hg_lr*10, " => ", name)
+        #     if 'weight' in name:
+        #         hg_weight_list.append(value)
+        #     elif 'bias' in name:
+        #         hg_bias_list.append(value)
         else:
             print("other layer's learning rate:", lr, " => ", name)
             if 'weight' in name:
@@ -200,33 +212,26 @@ def get_model(args):
         #         fpn_bias_list.append(value)
         #     continue
     # set params list
-    optim_params_list = []
     op_params_list = [{'params': other_weight_list, 'lr': lr}, {'params': other_bias_list, 'lr': lr * 2},
-                      {'params': cls_weight_list, 'lr': lr * 10}, {'params': cls_bias_list, 'lr': lr * 20}]
-    optim_params_list.append('other_weight')
-    optim_params_list.append('other_bias')
-    optim_params_list.append('cls_weight')
-    optim_params_list.append('cls_bias')
+                      {'params': cls_weight_list, 'lr': cls_lr}, {'params': cls_bias_list, 'lr': cls_lr * 2}]
+    optim_params_list = ['other_weight', 'other_bias', 'cls_weight', 'cls_bias']
     if 'sos' in args.mode:
         op_params_list.append({'params': sos_weight_list, 'lr': sos_lr})
         op_params_list.append({'params': sos_bias_list, 'lr': sos_lr * 2})
-        optim_params_list.append('sos_weight')
-        optim_params_list.append('sos_bias')
+        optim_params_list.append('sos_weight'), optim_params_list.append('sos_bias')
     if 'sa' in args.mode:
         op_params_list.append({'params': sa_weight_list, 'lr': sa_lr})
         op_params_list.append({'params': sa_bias_list, 'lr': sa_lr * 2})
-        optim_params_list.append('sa_weight')
-        optim_params_list.append('sa_bias')
-    if 'hinge' in args.mode:
-        op_params_list.append({'params': hg_weight_list, 'lr': hg_lr * 10})
-        op_params_list.append({'params': hg_bias_list, 'lr': hg_lr * 20})
-        optim_params_list.append('hinge_weight')
-        optim_params_list.append('hinge_bias')
+        optim_params_list.append('sa_weight'), optim_params_list.append('sa_bias')
+    # if 'hinge' in args.mode:
+    #     op_params_list.append({'params': hg_weight_list, 'lr': hg_lr * 10})
+    #     op_params_list.append({'params': hg_bias_list, 'lr': hg_lr * 20})
+    #     optim_params_list.append('hinge_weight'), optim_params_list.append('hinge_bias')
     # if 'rcst' in args.mode or 'sst' in args.mode:
     #     op_params_list.append({'params': fpn_weight_list, 'lr': rcst_lr})
     #     op_params_list.append({'params': fpn_bias_list, 'lr': rcst_lr * 2})
 
-    optimizer = optim.SGD(op_params_list, momentum=0.9, weight_decay=args.weight_decay, nesterov=True)
+    optimizer = optim.SGD(op_params_list, momentum=0.9, weight_decay=0.0005, nesterov=True)
     model = torch.nn.DataParallel(model, args.gpus)
     return model, optimizer, optim_params_list
 
@@ -267,15 +272,16 @@ def log_init(args):
     log_head = '#epoch \t loss \t pred@1 \t pred@5 \t'
 
     losses_so = None
-    losses_hg = None
+    # losses_hg = None
     losses_ra = None
+    losses_spa = None
 
     if 'sos' in args.mode:
         losses_so = AverageMeter()
         log_head += 'loss_so \t'
-    if 'hinge' in args.mode:
-        losses_hg = AverageMeter()
-        log_head += 'loss_hg \t'
+    # if 'hinge' in args.mode:
+    #     losses_hg = AverageMeter()
+    #     log_head += 'loss_hg \t'
     # if 'rcst' in args.mode or 'sst' in args.mode:
     #     losses_rcst = AverageMeter()
     #     return_params.append(losses_rcst)
@@ -283,12 +289,55 @@ def log_init(args):
     if args.ram:
         losses_ra = AverageMeter()
         log_head += 'loss_ra \t'
+    if args.spa_loss:
+        losses_spa = AverageMeter()
+        log_head += 'loss_spa \t'
 
     return_params.append(losses_so)
-    return_params.append(losses_hg)
+    # return_params.append(losses_hg)
     return_params.append(losses_ra)
+    return_params.append(losses_spa)
 
     log_head += '\n'
     return_params.append(log_head)
 
     return return_params
+
+def warmup_init(args, optimizer, op_params_list):
+    if args.warmup_fun == 'cos':
+        cos_scheduler = None
+        if args.dataset == 'ilsvrc':
+            cos_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=2, T_mult=1)
+        if args.dataset == 'cub':
+            cos_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=4, T_mult=1)
+        return cos_scheduler
+
+    if args.warmup_fun == 'gra':
+        if args.dataset == 'ilsvrc':
+            wp_period = [2,2,2]
+            wp_node = [0,3,6]
+            wp_ps = [['sos_weight', 'sos_bias'],
+                     ['sa_weight', 'sa_bias'],op_params_list]
+        elif args.dataset == 'cub':
+            wp_period = [9, 4, 5, 9]
+            wp_node = [0, 10, 25, 31]
+            wp_ps = [['cls_weight', 'cls_bias', 'sos_weight', 'sos_bias'],
+                     ['other_weight', 'other_bias', 'cls_weight', 'cls_bias', 'sos_weight', 'sos_bias'],
+                     ['sa_weight', 'sa_bias'],
+                     op_params_list]
+
+        gra_scheduler = GradualWarmupScheduler(optimizer=optimizer, warmup_period=wp_period,
+                                                  warmup_node=wp_node, warmup_params=wp_ps,
+                                                  optim_params_list=op_params_list)
+        optimizer.zero_grad()
+        optimizer.step()
+        warmup_message = 'warmup_period:' + ','.join(list(map(str, wp_period))) + '\n'
+        warmup_message += 'warmup_timeNode:' + ','.join(list(map(str, wp_node))) + '\n'
+        for p_l in wp_ps:
+            str_p = ','.join(p_l)
+            warmup_message += 'warmup_params:' + str_p + '\n'
+        with open(os.path.join(args.snapshot_dir, 'train_record.csv'), 'a') as fw:
+            fw.write(warmup_message)
+
+        return gra_scheduler
+

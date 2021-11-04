@@ -26,9 +26,9 @@ def get_topk_boxes_hier(args, cls_inds, cam_map, gt_label, crop_size, threshold,
         cam_map_ = cam_map[cls, :, :]  # (14,14)
 
         # using different norm function
-        norm_fun = NormalizationFamily()
-        cam_map_ = norm_fun(args.norm_fun, cam_map_, args.percentile)
-        # cam_map_ = norm_atten_map(cam_map_)  # (14,14)
+        # norm_fun = NormalizationFamily()
+        # cam_map_ = norm_fun(args.norm_fun, cam_map_, args.percentile)
+        cam_map_ = norm_atten_map(cam_map_)  # (14,14)
 
         # TODO(Kevin): crop_size correctly ?
         cam_map_cls = cv2.resize(cam_map_, dsize=(crop_size, crop_size))
@@ -65,9 +65,9 @@ def get_topk_boxes_hier(args, cls_inds, cam_map, gt_label, crop_size, threshold,
     cam_map_ = cam_map[int(gt_label), :, :]
 
     # using different norm function
-    norm_fun = NormalizationFamily()
-    cam_map_ = norm_fun(args.norm_fun, cam_map_, args.percentile)
-    # cam_map_ = norm_atten_map(cam_map_)
+    # norm_fun = NormalizationFamily()
+    # cam_map_ = norm_fun(args.norm_fun, cam_map_, args.percentile)
+    cam_map_ = norm_atten_map(cam_map_)
 
     # TODO(Kevin): crop_size correctly？
     cam_map_gt_known = cv2.resize(cam_map_, dsize=(crop_size, crop_size))
@@ -186,9 +186,9 @@ def get_topk_boxes_scg_v2(args, cls_inds, top_cams, sc_maps, crop_size, topk=(1,
             sc_map_cls_i = cam_sc_map * (cam_sc_map >= 0)
 
             # using different norm function
-            norm_fun = NormalizationFamily()
-            sc_map_cls_i = norm_fun(args.norm_fun, sc_map_cls_i, args.percentile)
-            # sc_map_cls_i = (sc_map_cls_i - np.min(sc_map_cls_i)) / (np.max(sc_map_cls_i) - np.min(sc_map_cls_i) + 1e-10)
+            # norm_fun = NormalizationFamily()
+            # sc_map_cls_i = norm_fun(args.norm_fun, sc_map_cls_i, args.percentile)
+            sc_map_cls_i = (sc_map_cls_i - np.min(sc_map_cls_i)) / (np.max(sc_map_cls_i) - np.min(sc_map_cls_i) + 1e-10)
 
             sc_map_cls_i = cv2.resize(sc_map_cls_i, dsize=(crop_size, crop_size))
             sc_map_cls = np.maximum(sc_map_cls, sc_map_cls_i)

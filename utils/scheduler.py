@@ -22,8 +22,6 @@ class GradualWarmupScheduler(_LRScheduler):
         self.stage = [(node, node+period) for node, period in zip(warmup_node, warmup_period)]  #[(0,5),(20,25)]
         self.warmup_params = warmup_params  # [['cls_weight', 'cls_bias', 'sos_weight', 'sos_bias'], ['sa_weight', 'sa_bias']]
         self.optim_params = optim_params_list  # ['cls_weight', 'cls_bias', 'sos_weight', 'sos_bias', 'sa_weight', 'sa_bias', 'other_weight', 'other_bias']
-        # print("[TEST] self.warmup_period, self.warmup_node, self.stage, self.warmup_params, self.optim_params:")
-        # print(self.warmup_period, self.warmup_node, self.stage, self.warmup_params, self.optim_params)
         super(GradualWarmupScheduler, self).__init__(optimizer)
 
     def get_lr(self):
@@ -31,7 +29,6 @@ class GradualWarmupScheduler(_LRScheduler):
         If current epoch is in the warmup period, parameters' learning rates are all set to 0 except 'warmup_params'.
         :return: updated learning rate => list
         """
-        # print("[TEST] last_epoch:", self.last_epoch, "stage:", self.stage)
         for idx, (start_epoch, end_epoch) in enumerate(self.stage):
             if start_epoch <= self.last_epoch <= end_epoch:  # while current epoch in any period of warmup
                 new_lr = []

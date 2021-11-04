@@ -43,36 +43,71 @@ def reduce_lr_poly(args, optimizer, global_iter, max_iter):
 
 def get_optimizer(args, model):
     lr = args.lr
-    # opt = optim.SGD(params=model.parameters(), lr=lr, momentum=0.9, weight_decay=0.0001)
     opt = optim.SGD(params=[para for name, para in model.named_parameters() if 'features' not in name], lr=lr,
                     momentum=0.9, weight_decay=0.0001)
-    # lambda1 = lambda epoch: 0.1 if epoch in [85, 125, 165] else 1.0
-    # scheduler = LambdaLR(opt, lr_lambda=lambda1)
-
     return opt
 
 
 def get_adam(args, model):
     lr = args.lr
     opt = optim.Adam(params=model.parameters(), lr=lr, weight_decay=0.0005)
-    # opt = optim.Adam(params=model.parameters(), lr =lr)
-
     return opt
 
 
-def reduce_lr(args, optimizer, epoch, factor=0.1):
+def reduce_lr(args, optimizer, epoch, factor=0.1, decay_params=None):
+    if decay_params is not None:
+        decay_params = decay_params.strip().split(',')
+        # print(decay_params)
+
     if args.decay_points == 'none':
-        values = [str(epoch)]
+        points = [str(epoch)]
     else:
-        values = args.decay_points.strip().split(',')
+        points = args.decay_points.strip().split(',')
     try:
-        change_points = map(lambda x: int(x.strip()), values)
+        change_points = map(lambda x: int(x.strip()), points)
     except ValueError:
         change_points = None
     if change_points is not None and epoch in change_points:
-        for g in optimizer.param_groups:
-            g['lr'] = g['lr'] * factor
+        if decay_params is not None:
+            for idx in decay_params:
+                if idx == 'all':
+                    for g in optimizer.param_groups:
+                        g['lr'] = g['lr'] * factor
+                    return True
+                else:
+                    index = int(idx)
+                    optimizer.param_groups[index]['lr'] = optimizer.param_groups[index]['lr'] * factor
+        else:
+            for g in optimizer.param_groups:
+                g['lr'] = g['lr'] * factor
         return True
+    else:
+        return False
+
+def increase_lr(args, optimizer, epoch, factor=10, increase_params=None):
+    if increase_params is not None:
+        increase_params = increase_params.strip().split(',')
+    points = args.increase_points.strip().split(',')
+    try:
+        change_points = map(lambda x: int(x.strip()), points)
+    except ValueError:
+        change_points = None
+    if change_points is not None and epoch in change_points:
+        if increase_params is not None:
+            for idx in increase_params:
+                if idx == 'all':
+                    for g in optimizer.param_groups:
+                        g['lr'] = g['lr'] * factor
+                    return True
+                else:
+                    index = int(idx)
+                    optimizer.param_groups[index]['lr'] = optimizer.param_groups[index]['lr'] * factor
+        else:
+            for g in optimizer.param_groups:
+                g['lr'] = g['lr'] * factor
+        return True
+    else:
+        return False
 
 
 def adjust_lr(args, optimizer, epoch):

@@ -20,9 +20,9 @@ def save_cam(args, tras_img, save_cam, cls_logits, img_path, gt_label, epoch, th
     for i in range(5):
         cam_map_ = cam_map[idx_top5[i], :, :]
 
-        norm_fun = NormalizationFamily()
-        cam_map_ = norm_fun(args.norm_fun, cam_map_, args.percentile)
-        # cam_map_ = norm_atten_map(cam_map_)
+        # norm_fun = NormalizationFamily()
+        # cam_map_ = norm_fun(args.norm_fun, cam_map_, args.percentile)
+        cam_map_ = norm_atten_map(cam_map_)
 
         cam_map_cls = cv2.resize(cam_map_, dsize=(w, h))
         maxk_maps.append(cam_map_cls.copy())

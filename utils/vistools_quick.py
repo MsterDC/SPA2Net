@@ -186,9 +186,9 @@ def debug_vis_sc(args, idx, show_idxs, img_path, sc_maps_fo_fuse, sc_maps_so_fus
                                                                                         region_wrong)
         debug_dir = os.path.join(args.debug_dir, top1_wrong_detail_dir) if args.debug_detail else args.debug_dir
         for show_id in show_idxs:
-            save_im_sim(img_path[show_id], sc_maps_fo_fuse[show_id], debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix='fo_45')
-            save_im_sim(img_path[show_id], sc_maps_so_fuse[show_id], debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix='so_45')
-            save_im_sim(img_path[show_id], sc_maps_fuse[show_id], debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix='com45')
+            save_im_sim(args, img_path[show_id], sc_maps_fo_fuse[show_id], debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix='fo_45')
+            save_im_sim(args, img_path[show_id], sc_maps_so_fuse[show_id], debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix='so_45')
+            save_im_sim(args, img_path[show_id], sc_maps_fuse[show_id], debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix='com45')
     pass
 
 
@@ -384,9 +384,9 @@ def save_im_sim(args, im_file, aff_maps, save_dir, suffix='', gt_label=None, epo
             h_aff_i, w_aff_i = int(point[0] * h_aff / h), int(point[1] * w_aff / w)
             aff_map_i = aff_i[:, h_aff_i * w_aff + w_aff_i].reshape(h_aff, w_aff)
 
-            norm_fun = NormalizationFamily()
-            aff_map_i = norm_fun(args.norm_fun, aff_map_i, args.percentile)
-            # aff_map_i = (aff_map_i - np.min(aff_map_i)) / (np.max(aff_map_i) - np.min(aff_map_i) + 1e-10)
+            # norm_fun = NormalizationFamily()
+            # aff_map_i = norm_fun(args.norm_fun, aff_map_i, args.percentile)
+            aff_map_i = (aff_map_i - np.min(aff_map_i)) / (np.max(aff_map_i) - np.min(aff_map_i) + 1e-10)
 
             aff_map_i = cv2.resize(aff_map_i, dsize=(w, h))
             aff_map_i = cv2.applyColorMap(np.uint8(255 * aff_map_i), cv2.COLORMAP_JET)
