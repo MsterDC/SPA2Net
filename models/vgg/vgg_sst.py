@@ -1,17 +1,11 @@
-import cv2
 import torch
-from torch.autograd import Variable
-from distutils.version import LooseVersion
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 import torch.nn.functional as F
-import random
 import numpy as np
 import os
 from utils.vistools import norm_for_batch_map
 from .sa import ScaledDotProductAttention
-from .thr_avg_pool import ThresholdedAvgPool2d
-from utils.vistools_quick import NormalizationFamily
 
 __all__ = [
     'VGG', 'vgg11', 'vgg11_bn', 'vgg13', 'vgg13_bn', 'vgg16', 'vgg16_bn',
@@ -38,7 +32,7 @@ class VGG(nn.Module):
         self.conv4 = nn.Sequential(*features[cnvs[1]:cnvs[2]])
         self.conv5 = nn.Sequential(*features[cnvs[2]:-1])
         self.num_classes = num_classes
-        self.normalize = NormalizationFamily()
+        # self.normalize = NormalizationFamily()
         self.args = args
 
         self.cls = nn.Sequential(
@@ -60,22 +54,23 @@ class VGG(nn.Module):
                 nn.ReLU(True),
                 nn.Conv2d(1024, 1, kernel_size=1, padding=0))
 
-        if 'mc_sos' in self.args.mode:
-            self.mc_sos = nn.Sequential(
-                nn.Conv2d(512, 1024, kernel_size=3, padding=1, dilation=1),
-                nn.ReLU(True),
-                nn.Conv2d(1024, 1024, kernel_size=3, padding=1, dilation=1),
-                nn.ReLU(True),
-                nn.Conv2d(1024, self.num_classes, kernel_size=1, padding=0))
+        # if 'mc_sos' in self.args.mode:
+        #     self.mc_sos = nn.Sequential(
+        #         nn.Conv2d(512, 1024, kernel_size=3, padding=1, dilation=1),
+        #         nn.ReLU(True),
+        #         nn.Conv2d(1024, 1024, kernel_size=3, padding=1, dilation=1),
+        #         nn.ReLU(True),
+        #         nn.Conv2d(1024, self.num_classes, kernel_size=1, padding=0)
+        #     )
 
-        if 'hinge' in self.args.mode:
-            self.hinge = nn.Sequential(
-                nn.Conv2d(512, 1024, kernel_size=3, padding=1, dilation=1),
-                nn.ReLU(True),
-                nn.Conv2d(1024, 1024, kernel_size=3, padding=1, dilation=1),
-                nn.ReLU(True),
-                nn.Conv2d(1024, self.num_classes, kernel_size=1, padding=0)
-            )
+        # if 'hinge' in self.args.mode:
+        #     self.hinge = nn.Sequential(
+        #         nn.Conv2d(512, 1024, kernel_size=3, padding=1, dilation=1),
+        #         nn.ReLU(True),
+        #         nn.Conv2d(1024, 1024, kernel_size=3, padding=1, dilation=1),
+        #         nn.ReLU(True),
+        #         nn.Conv2d(1024, self.num_classes, kernel_size=1, padding=0)
+        #     )
 
         # if 'rcst' in self.args.mode or 'sst' in self.args.mode:
         #     self.rcst = nn.Sequential(
@@ -88,8 +83,8 @@ class VGG(nn.Module):
         #     self.fpn = FPN(out_channels=512)
         #     self.mse_loss_rcst = torch.nn.MSELoss(reduce=True, size_average=True)
 
-        if self.args.use_tap == 'True':
-            self.thr_avg_pool = ThresholdedAvgPool2d(threshold=args.tap_th)
+        # if self.args.use_tap == 'True':
+        #     self.thr_avg_pool = ThresholdedAvgPool2d(threshold=args.tap_th)
 
         self._initialize_weights()
 
@@ -97,7 +92,7 @@ class VGG(nn.Module):
         self.ce_loss = F.cross_entropy
         self.mse_loss = F.mse_loss
         self.bce_loss = F.binary_cross_entropy_with_logits  # with sigmoid function
-        self.hinge_loss = F.multi_margin_loss
+        # self.hinge_loss = F.multi_margin_loss
 
     def _initialize_weights(self):
         for m in self.modules():
@@ -112,52 +107,70 @@ class VGG(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
-    def get_cls_loss(self, logits, label):
-        if self.args.cls_or_hinge == 'cls':
-            return self.ce_loss(logits, label.long())
-        elif self.args.cls_or_hinge == 'hinge':
-            if self.args.hinge_norm == 'softmax':
-                normed_logits = torch.softmax(logits, dim=-1)
-            elif self.args.hinge_norm == 'norm':
-                min_val, _ = torch.min(logits, dim=-1, keepdim=True)
-                max_val, _ = torch.max(logits, dim=-1, keepdim=True)
-                normed_logits = (logits - min_val) / (max_val - min_val + 1e-15)
-            return self.hinge_loss(normed_logits, label.long(), p=self.args.hinge_p, margin=self.args.hinge_m)
+    def get_masked_pseudo_gt(self, gt_scm, fg_th, bg_th, method='TC'):
+        # for BC: convert scm to [0,1] binary mask.
+        if method == 'BC':
+            mask_hm_bg = torch.zeros_like(gt_scm)
+            mask_hm_fg = torch.ones_like(gt_scm)
+            gt_scm = torch.where(gt_scm >= fg_th, mask_hm_fg, mask_hm_bg)
+        # for TC: convert scm to [0,value,1] mixed mask.
+        elif method == 'TC':
+            mask_hm_zero = torch.zeros_like(gt_scm)
+            mask_hm_one = torch.ones_like(gt_scm)
+            gt_scm = torch.where(gt_scm >= fg_th, mask_hm_one, gt_scm)
+            gt_scm = torch.where(gt_scm <= bg_th, mask_hm_zero, gt_scm)
+        return gt_scm
 
-    def get_ra_loss(self, logits, label, th_bg=0.3, bg_fg_gap=0.0):
-        n, _, _, _ = logits.size()
-        cls_logits = F.softmax(logits, dim=1)
-        var_logits = torch.var(cls_logits, dim=1)
+    def get_scm(self, logits, gt_label, sc_maps_fo, sc_maps_so):
+        # get cam
+        loc_map = F.relu(logits)
+        cam_map = loc_map.data.cpu().numpy()
+        # gt_label: (n, )
+        cam_map_ = cam_map[torch.arange(cam_map.shape[0]), gt_label.data.cpu().numpy().astype(int), :, :]  # (bs, w, h)
 
         # using different norm function
-        norm_fun = self.args.norm_fun + '_batch'
-        norm_var_logits = self.normalize(norm_fun, var_logits, self.args.percentile)
-        norm_var_logits = norm_var_logits.to(self.args.device)
-        # norm_var_logits = self.normalize_feat(var_logits)  # (n, w, h)
+        # norm_fun = self.args.norm_fun + '_batch'
+        # cam_map_cls = self.normalize(norm_fun, cam_map_, self.args.percentile)
+        cam_map_cls = norm_for_batch_map(cam_map_)  # (64,14,14)
 
-        bg_mask = (norm_var_logits < th_bg).float()
-        fg_mask = (norm_var_logits > (th_bg + bg_fg_gap)).float()
-        cls_map = logits[torch.arange(n), label.long(), ...]
-        cls_map = torch.sigmoid(cls_map)
-        ra_loss = torch.mean(cls_map * bg_mask + (1 - cls_map) * fg_mask)
-        return ra_loss
+        # using fo/so and diff stage feature to get fused scm.
+        sc_maps = []
+        if self.args.scg_com:
+            for sc_map_fo_i, sc_map_so_i in zip(sc_maps_fo, sc_maps_so):
+                if (sc_map_fo_i is not None) and (sc_map_so_i is not None):
+                    sc_map_so_i = sc_map_so_i.to(self.args.device)
+                    sc_map_i = torch.max(sc_map_fo_i, self.args.scg_so_weight * sc_map_so_i)
+                    sc_map_i = sc_map_i / (torch.sum(sc_map_i, dim=1, keepdim=True) + 1e-10)
+                    sc_maps.append(sc_map_i)
+        sc_com = sc_maps[-2] + sc_maps[-1]
 
-    def get_hinge_loss(self, hg_logits, label):
-        hg_cls_logits = torch.mean(torch.mean(hg_logits, dim=2), dim=2)  # GAP
-        if self.args.hinge_norm == 'softmax':
-            normed_logits = torch.softmax(hg_cls_logits, dim=-1)
-        elif self.args.hinge_norm == 'norm':
-            min_val, _ = torch.min(hg_cls_logits, dim=-1, keepdim=True)
-            max_val, _ = torch.max(hg_cls_logits, dim=-1, keepdim=True)
-            normed_logits = (hg_cls_logits - min_val) / (max_val - min_val + 1e-15)
-        hinge_loss = self.hinge_loss(normed_logits, label.long(), p=self.args.hinge_p, margin=self.args.hinge_m)
-        return hinge_loss
+        # weighted sum for scm and cam
+        sc_map = sc_com.squeeze().data.cpu().numpy()  # (64,196,196)
+        wh_sc, bz = sc_map.shape[1], sc_map.shape[0]
+        h_sc, w_sc = int(np.sqrt(wh_sc)), int(np.sqrt(wh_sc))  # 14,14
+        cam_map_seg = cam_map_cls.reshape(bz, 1, -1)  # (64,1,196)
+        cam_sc_dot = torch.bmm(torch.from_numpy(cam_map_seg), torch.from_numpy(sc_map))  # (64,1,196)
+        cam_sc_map = cam_sc_dot.reshape(bz, w_sc, h_sc)  # (64,14,14)
+        sc_map_cls_i = torch.where(cam_sc_map >= 0, cam_sc_map, torch.zeros_like(cam_sc_map))
+
+        # using different norm function
+        # sc_map_cls_i = self.normalize(norm_fun, sc_map_cls_i, self.args.percentile)
+        sc_map_cls_i = (sc_map_cls_i - torch.min(sc_map_cls_i)) / (
+                torch.max(sc_map_cls_i) - torch.min(sc_map_cls_i) + 1e-10)
+
+        gt_scm = torch.where(sc_map_cls_i > 0, sc_map_cls_i, torch.zeros_like(sc_map_cls_i))
+        # segment fg/bg for scm or not.
+        gt_scm = self.get_masked_pseudo_gt(gt_scm, self.args.sos_fg_th, self.args.sos_bg_th,
+                                           method=self.args.sos_seg_method) \
+            if self.args.sos_gt_seg == 'True' else gt_scm
+        gt_scm = gt_scm.detach()
+        return gt_scm
 
     def hsc(self, f_phi, fo_th=0.2, so_th=1, order=2):
         n, c_nl, h, w = f_phi.size()
-        if h != 14 or w != 14:
-            h, w = 14, 14
-            f_phi = F.interpolate(f_phi, size=(h, w), mode='bilinear', align_corners=True)
+        # if h != 14 or w != 14:
+        #     h, w = 14, 14
+        #     f_phi = F.interpolate(f_phi, size=(h, w), mode='bilinear', align_corners=True)
         f_phi = f_phi.permute(0, 2, 3, 1).contiguous().view(n, -1, c_nl)
         f_phi_normed = f_phi / (torch.norm(f_phi, dim=2, keepdim=True) + 1e-10)
 
@@ -188,68 +201,26 @@ class VGG(nn.Module):
         norm_feat = norm_feat.view(n, fh, fw)
         return norm_feat
 
-    def get_scm(self, logits, gt_label, sc_maps_fo, sc_maps_so):
-        # get cam
-        loc_map = F.relu(logits)
-        cam_map = loc_map.data.cpu().numpy()
-        # gt_label: (n, )
-        cam_map_ = cam_map[torch.arange(cam_map.shape[0]), gt_label.data.cpu().numpy().astype(int), :, :]  # (bs, w, h)
+    def get_sparse_loss(self, act_map):
+        n, h, w = act_map.shape
+        post_map = torch.where(act_map >= 0, act_map, torch.zeros_like(act_map))
+        spa_loss = torch.mean(torch.sum(torch.sum(post_map, dim=1), dim=1) / (h*w) * 1.0)
+        return spa_loss * self.args.spa_loss_weight
 
-        # using different norm function
-        norm_fun = self.args.norm_fun + '_batch'
-        cam_map_cls = self.normalize(norm_fun, cam_map_, self.args.percentile)
-        # cam_map_cls = norm_for_batch_map(cam_map_)  # (64,14,14)
-
-        # using fo/so and diff stage feature to get fused scm.
-        sc_maps = []
-        if self.args.scg_com:
-            for sc_map_fo_i, sc_map_so_i in zip(sc_maps_fo, sc_maps_so):
-                if (sc_map_fo_i is not None) and (sc_map_so_i is not None):
-                    sc_map_so_i = sc_map_so_i.to(self.args.device)
-                    sc_map_i = torch.max(sc_map_fo_i, self.args.scg_so_weight * sc_map_so_i)
-                    sc_map_i = sc_map_i / (torch.sum(sc_map_i, dim=1, keepdim=True) + 1e-10)
-                    sc_maps.append(sc_map_i)
-        sc_com = sc_maps[-2] + sc_maps[-1]
-
-        # weighted sum for scm and cam
-        sc_map = sc_com.squeeze().data.cpu().numpy()  # (64,196,196)
-        wh_sc, bz = sc_map.shape[1], sc_map.shape[0]
-        h_sc, w_sc = int(np.sqrt(wh_sc)), int(np.sqrt(wh_sc))  # 14,14
-        cam_map_seg = cam_map_cls.reshape(bz, 1, -1)  # (64,1,196)
-        cam_sc_dot = torch.bmm(torch.from_numpy(cam_map_seg), torch.from_numpy(sc_map))  # (64,1,196)
-        cam_sc_map = cam_sc_dot.reshape(bz, w_sc, h_sc)  # (64,14,14)
-        sc_map_cls_i = torch.where(cam_sc_map >= 0, cam_sc_map, torch.zeros_like(cam_sc_map))
-
-        # using different norm function
-        sc_map_cls_i = self.normalize(norm_fun, sc_map_cls_i, self.args.percentile)
-        # sc_map_cls_i = (sc_map_cls_i - torch.min(sc_map_cls_i)) / (
-        #         torch.max(sc_map_cls_i) - torch.min(sc_map_cls_i) + 1e-10)
-
-        gt_scm = torch.where(sc_map_cls_i > 0, sc_map_cls_i, torch.zeros_like(sc_map_cls_i))
-        # segment fg/bg for scm or not.
-        gt_scm = self.get_masked_pseudo_gt(gt_scm, self.args.sos_fg_th, self.args.sos_bg_th,
-                                           method=self.args.sos_seg_method) \
-            if self.args.sos_gt_seg == 'True' else gt_scm
-        gt_scm = gt_scm.detach()
-        return gt_scm
-
-    def get_masked_pseudo_gt(self, gt_scm, fg_th, bg_th, method='TC'):
-        # for BC: convert scm to [0,1] binary mask.
-        if method == 'BC':
-            mask_hm_bg = torch.zeros_like(gt_scm)
-            mask_hm_fg = torch.ones_like(gt_scm)
-            gt_scm = torch.where(gt_scm >= fg_th, mask_hm_fg, mask_hm_bg)
-        # for TC: convert scm to [0,value,1] mixed mask.
-        elif method == 'TC':
-            mask_hm_zero = torch.zeros_like(gt_scm)
-            mask_hm_one = torch.ones_like(gt_scm)
-            gt_scm = torch.where(gt_scm >= fg_th, mask_hm_one, gt_scm)
-            gt_scm = torch.where(gt_scm <= bg_th, mask_hm_zero, gt_scm)
-        return gt_scm
+    # def get_hinge_loss(self, hg_logits, label):
+    #     hg_cls_logits = torch.mean(torch.mean(hg_logits, dim=2), dim=2)  # GAP
+    #     if self.args.hinge_norm == 'softmax':
+    #         normed_logits = torch.softmax(hg_cls_logits, dim=-1)
+    #     elif self.args.hinge_norm == 'norm':
+    #         min_val, _ = torch.min(hg_cls_logits, dim=-1, keepdim=True)
+    #         max_val, _ = torch.max(hg_cls_logits, dim=-1, keepdim=True)
+    #         normed_logits = (hg_cls_logits - min_val) / (max_val - min_val + 1e-15)
+    #     hinge_loss = self.hinge_loss(normed_logits, label.long(), p=self.args.hinge_p, margin=self.args.hinge_m)
+    #     return hinge_loss
 
     def get_sos_loss(self, pre_hm, gt_hm, label):
-        if 'mc_sos' in self.args.mode:
-            pre_hm = pre_hm[torch.arange(pre_hm.shape[0]), label.long(), ...]  # (n, w, h)
+        # if 'mc_sos' in self.args.mode:
+        #     pre_hm = pre_hm[torch.arange(pre_hm.shape[0]), label.long(), ...]  # (n, w, h)
         if self.args.sos_gt_seg == 'False' or self.args.sos_loss_method == 'MSE':
             return self.mse_loss(pre_hm, gt_hm)
         if self.args.sos_seg_method == 'TC':
@@ -264,20 +235,56 @@ class VGG(nn.Module):
                 return self.bce_loss(pre_hm, gt_hm)
         raise Exception("[Error] Invalid SOS segmentation or wrong sos loss type.")
 
+    def get_cls_loss(self, logits, label):
+        # if self.args.cls_or_hinge == 'cls':
+        #     return self.ce_loss(logits, label.long())
+        return self.ce_loss(logits, label.long())
+        # elif self.args.cls_or_hinge == 'hinge':
+        #     if self.args.hinge_norm == 'softmax':
+        #         normed_logits = torch.softmax(logits, dim=-1)
+        #     elif self.args.hinge_norm == 'norm':
+        #         min_val, _ = torch.min(logits, dim=-1, keepdim=True)
+        #         max_val, _ = torch.max(logits, dim=-1, keepdim=True)
+        #         normed_logits = (logits - min_val) / (max_val - min_val + 1e-15)
+        #     return self.hinge_loss(normed_logits, label.long(), p=self.args.hinge_p, margin=self.args.hinge_m)
+
+    def get_ra_loss(self, logits, label, th_bg=0.3, bg_fg_gap=0.0):
+        n, _, _, _ = logits.size()
+        cls_logits = F.softmax(logits, dim=1)
+        var_logits = torch.var(cls_logits, dim=1)
+
+        norm_var_logits = self.normalize_feat(var_logits)  # (n, w, h)
+
+        bg_mask = (norm_var_logits < th_bg).float()
+        fg_mask = (norm_var_logits > (th_bg + bg_fg_gap)).float()
+        cls_map = logits[torch.arange(n), label.long(), ...]
+        cls_map = torch.sigmoid(cls_map)
+        ra_loss = torch.mean(cls_map * bg_mask + (1 - cls_map) * fg_mask)
+        return ra_loss
+
     def get_loss(self, loss_params):
         loss = 0
-        epoch, logits, label, hg_logits, pred_sos, gt_sos = loss_params.get('current_epoch'), loss_params.get('cls_logits'), \
-                                                            loss_params.get('cls_label'), loss_params.get('hg_logits'), \
+        # epoch, logits, label, hg_logits, pred_sos, gt_sos = loss_params.get('current_epoch'), loss_params.get('cls_logits'), \
+        #                                                     loss_params.get('cls_label'), loss_params.get('hg_logits'), \
+        #                                                     loss_params.get('pred_sos'), loss_params.get('gt_sos')
+        epoch, logits, label, pred_sos, gt_sos = loss_params.get('current_epoch'), loss_params.get('cls_logits'), \
+                                                            loss_params.get('cls_label'), \
                                                             loss_params.get('pred_sos'), loss_params.get('gt_sos')
-        cls_logits = self.thr_avg_pool(logits) if (self.args.use_tap == 'True') and (self.args.tap_start <= epoch) \
-            else torch.mean(torch.mean(logits, dim=2), dim=2)
+        # cls_logits = self.thr_avg_pool(logits) if (self.args.use_tap == 'True') and (self.args.tap_start <= epoch) \
+        #     else torch.mean(torch.mean(logits, dim=2), dim=2)
+        cls_logits = torch.mean(torch.mean(logits, dim=2), dim=2)
         # get cls loss
         loss = loss + self.get_cls_loss(cls_logits, label)
-        if 'hinge' in self.args.mode:
-            hinge_loss = self.get_hinge_loss(hg_logits, label)
-            loss += self.args.hinge_loss_weight * hinge_loss
-        else:
-            hinge_loss = torch.zeros_like(loss)
+        # if 'hinge' in self.args.mode:
+        #     hinge_loss = self.get_hinge_loss(hg_logits, label)
+        #     loss += self.args.hinge_loss_weight * hinge_loss
+        # else:
+        #     hinge_loss = torch.zeros_like(loss)
+        # if self.args.spa_loss == 'True':
+        #     spa_loss = self.get_sparse_loss(pred_sos)
+        #     loss += self.args.spa_loss_weight * spa_loss
+        # else:
+        #     spa_loss = torch.zeros_like(loss)
         if 'sos' in self.args.mode and epoch >= self.args.sos_start:
             sos_loss = self.get_sos_loss(pred_sos, gt_sos, label)
             loss += self.args.sos_loss_weight * sos_loss
@@ -299,24 +306,8 @@ class VGG(nn.Module):
         # else:
         #     rcst_loss = torch.zeros_like(loss)
         # return loss, ra_loss, sos_loss, rcst_loss
-        return loss, ra_loss, sos_loss, hinge_loss
-
-    def _forward_spa(self, train_flag, feat):
-        f12, f3, f4, f5 = feat
-        sc_fo, sc_so = None, None
-        cls_map = self.cls(f5)
-        if not train_flag:
-            sc_fo, sc_so = self.cal_sc(feat)
-        return cls_map, sc_fo, sc_so  # 训练时sc_fo和sc_so=None
-
-    def _forward_spa_hinge(self, train_flag, feat):
-        C1_2, C3, C4, feat_5 = feat
-        sc_fo, sc_so = None, None
-        cls_map = self.cls(feat_5)
-        hg_map = self.hinge(feat_5)
-        if not train_flag:
-            sc_fo, sc_so = self.cal_sc(feat)
-        return cls_map, hg_map, sc_fo, sc_so
+        # return loss, ra_loss, sos_loss, hinge_loss, spa_loss
+        return loss, ra_loss, sos_loss
 
     def cal_sc(self, feat):
         F1_2, F3, F4, F5 = feat
@@ -361,6 +352,23 @@ class VGG(nn.Module):
             _mixed_edges += c
         _mixed_edges = _mixed_edges.detach()
         return _mixed_edges
+
+    def _forward_spa(self, train_flag, feat):
+        f12, f3, f4, f5 = feat
+        sc_fo, sc_so = None, None
+        cls_map = self.cls(f5)
+        if not train_flag:
+            sc_fo, sc_so = self.cal_sc(feat)
+        return cls_map, sc_fo, sc_so  # 训练时sc_fo和sc_so=None
+
+    # def _forward_spa_hinge(self, train_flag, feat):
+    #     C1_2, C3, C4, feat_5 = feat
+    #     sc_fo, sc_so = None, None
+    #     cls_map = self.cls(feat_5)
+    #     hg_map = self.hinge(feat_5)
+    #     if not train_flag:
+    #         sc_fo, sc_so = self.cal_sc(feat)
+    #     return cls_map, hg_map, sc_fo, sc_so
 
     def _forward_spa_sa(self, train_flag, current_epoch, feat):
         f12, f3, f4, f5 = feat
@@ -478,19 +486,19 @@ class VGG(nn.Module):
                 sos_map = sos_map.squeeze()
         return cls_map, sos_map, sc_fo, sc_so
 
-    def _forward_mc_sos(self, train_flag, current_epoch, feat):
-        f12, f3, f4, f5 = feat
-        cls_map = self.cls(f5)
-        sc_fo, sc_so, sos_map = None, None, None
-        if train_flag:  # train
-            if self.args.sos_start <= current_epoch:
-                sc_fo, sc_so = self.cal_sc(feat)
-                sos_map = self.mc_sos(f5)
-        else:  # test
-            sc_fo, sc_so = self.cal_sc(feat)
-            sos_map = self.mc_sos(f5)
-            sos_map = sos_map.squeeze()  # batch_size=1 when testing.
-        return cls_map, sos_map, sc_fo, sc_so
+    # def _forward_mc_sos(self, train_flag, current_epoch, feat):
+    #     f12, f3, f4, f5 = feat
+    #     cls_map = self.cls(f5)
+    #     sc_fo, sc_so, sos_map = None, None, None
+    #     if train_flag:  # train
+    #         if self.args.sos_start <= current_epoch:
+    #             sc_fo, sc_so = self.cal_sc(feat)
+    #             sos_map = self.mc_sos(f5)
+    #     else:  # test
+    #         sc_fo, sc_so = self.cal_sc(feat)
+    #         sos_map = self.mc_sos(f5)
+    #         sos_map = sos_map.squeeze()  # batch_size=1 when testing.
+    #     return cls_map, sos_map, sc_fo, sc_so
 
     def _forward_sos(self, train_flag, current_epoch, feat):
         f12, f3, f4, f5 = feat
