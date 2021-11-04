@@ -10,12 +10,12 @@ import torch.nn.functional as F
 from tensorboardX import SummaryWriter
 
 from utils import my_optim
-from utils.init_train import get_model, opts, save_checkpoint, reproducibility_set, log_init
+from utils.init_train import get_model, opts, save_checkpoint, reproducibility_set, log_init, warmup_init
 from utils import evaluate
 from utils.loader import data_loader
 from utils.save_cam_test import save_cam, save_sos, save_scm
-from utils.scheduler import GradualWarmupScheduler
 from utils.restore import restore
+
 
 
 def train(args):
@@ -35,8 +35,8 @@ def train(args):
 
     # load log parameters
     log_meters = log_init(args)
-    batch_time, losses, top1, top5, losses_so, losses_hg, losses_ra, log_head = log_meters
-
+    # batch_time, losses, top1, top5, losses_so, losses_hg, losses_ra, losses_spa, log_head = log_meters
+    batch_time, losses, top1, top5, losses_so, losses_ra, losses_spa, log_head = log_meters
     with open(os.path.join(args.snapshot_dir, 'train_record.csv'), 'a') as fw:
         fw.write(log_head)
 
@@ -52,31 +52,25 @@ def train(args):
     for p_name, g in zip(op_params_list, optimizer.param_groups):
         print('Initial-lr:', p_name, ':', g['lr'])
 
-    # set warmup params
+    # init warmup params
     if args.warmup == 'True':
-        if args.dataset == 'ilsvrc':
-            wp_period = [4]
-            wp_node = [5]
-            wp_ps = [['sa_weight', 'sa_bias', 'other_weight', 'other_bias', 'cls_weight', 'cls_bias']]
-        elif args.dataset == 'cub':
-            wp_period = [9, 4, 5, 9]
-            wp_node = [0, 10, 25, 31]
-            wp_ps = [['cls_weight', 'cls_bias', 'sos_weight', 'sos_bias'],
-                     ['other_weight', 'other_bias', 'cls_weight', 'cls_bias', 'sos_weight', 'sos_bias'],
-                     ['sa_weight', 'sa_bias'],
-                     op_params_list]
-        warmup_scheduler = GradualWarmupScheduler(optimizer=optimizer, warmup_period=wp_period,
-                                                  warmup_node=wp_node, warmup_params=wp_ps, optim_params_list=op_params_list)
-        optimizer.zero_grad()
-        optimizer.step()
+        if args.warmup_fun == 'cos':
+            cos_scheduler = warmup_init(args, optimizer, op_params_list)
+        if args.warmup_fun == 'gra':
+            gra_scheduler = warmup_init(args, optimizer, op_params_list)
 
-        warmup_message = 'warmup_period:' + ','.join(list(map(str, wp_period))) + '\n'
-        warmup_message += 'warmup_timeNode:' + ','.join(list(map(str, wp_node))) + '\n'
-        for p_l in wp_ps:
-            str_p = ','.join(p_l)
-            warmup_message += 'warmup_params:' + str_p +'\n'
-        with open(os.path.join(args.snapshot_dir, 'train_record.csv'), 'a') as fw:
-            fw.write(warmup_message)
+    # set parameter_lr for decay and increasing
+    # 0,1 / 2,3 / 4,5 / 6,7 => bb / cls / sos / sa, 'all' for all
+    # only used for ILSVRC now.
+    if args.dataset == 'ilsvrc':
+        decay_params = ['0,1,2,3,6,7', '0,1,2,3,6,7', None]
+    elif args.dataset == 'cub':
+        decay_params = ['0,1,2,3,6,7', None]
+    else:
+        raise Exception("Wrong dataset, please check !")
+
+    if args.increase_lr == 'True':
+        increase_params = [None]
 
     model.train()
     train_loader = data_loader(args)
@@ -88,44 +82,80 @@ def train(args):
 
     total_epoch = args.epoch
     global_counter = args.global_counter
+
     current_epoch = args.current_epoch
+    # current_epoch = 5
+
     end = time.time()
     max_iter = total_epoch * len(train_loader)
     print('Max iter:', max_iter)
     decay_flag = False
     decay_once = False
+    increase_once = False
+    decay_count = 0
+    increase_count = 0
 
     while current_epoch < total_epoch:
         model.train()
         losses.reset()
         if 'sos' in args.mode:
             losses_so.reset()
-        if 'hinge' in args.mode:
-            losses_hg.reset()
+        # if 'hinge' in args.mode:
+        #     losses_hg.reset()
         # if 'rcst' in args.mode or 'sst' in args.mode:
         #     losses_rcst.reset()
         if args.ram:
             losses_ra.reset()
+        if args.spa_loss == 'True':
+            losses_spa.reset()
         top1.reset()
         top5.reset()
         batch_time.reset()
 
-        # Pay attention to the time point for learning rate decay.
-        # If decay point in the period of warmup, the base_lrs and initial_lr of scheduler will be changed to decayed learning rate.
-        # Therefore, it is not recommend to use decay in the warmup period.
-        if args.decay_points == 'none' and args.dataset == 'cub':
-            if decay_flag is True and decay_once is False:
+        if args.warmup == 'True':  # with warmup
+            if args.dataset == 'cub':
+                if args.decay_points == 'none':
+                    if decay_flag is True and decay_once is False:
+                        if my_optim.reduce_lr(args, optimizer, current_epoch):
+                            total_epoch = current_epoch + 20
+                            decay_once = True
+                            if args.warmup_fun == 'gra':
+                                gra_scheduler.update_optimizer(optimizer, current_epoch)
+                else:
+                    raise Exception("On CUB200, u should specify decay_points = none !")
+                if args.warmup_fun == 'gra':
+                    gra_scheduler.step(current_epoch)
+            if args.dataset == 'ilsvrc':
                 if my_optim.reduce_lr(args, optimizer, current_epoch):
-                    total_epoch = current_epoch + 20
+                    if args.warmup_fun == 'gra':
+                        gra_scheduler.update_optimizer(optimizer, current_epoch)
+                if args.warmup_fun == 'gra':
+                    gra_scheduler.step(current_epoch)
+        else:  # without warmup
+            if args.dataset == 'cub':
+                if args.decay_points == 'none':
+                    if decay_flag is True and decay_once is False:
+                        decay_str = decay_params[decay_count]
+                        if my_optim.reduce_lr(args, optimizer, current_epoch, decay_params=decay_str):
+                            total_epoch = current_epoch + 20
+                            decay_once = True
+                else:
+                    if my_optim.reduce_lr(args, optimizer, current_epoch):
+                        decay_once = True
+            if args.dataset == 'ilsvrc':
+                decay_str = decay_params[decay_count]
+                if my_optim.reduce_lr(args, optimizer, current_epoch, decay_params=decay_str):
                     decay_once = True
-                    if args.warmup == 'True':
-                        warmup_scheduler.update_optimizer(optimizer, current_epoch)
-        else:
-            if my_optim.reduce_lr(args, optimizer, current_epoch) and args.warmup == 'True':
-                warmup_scheduler.update_optimizer(optimizer, current_epoch)
+                    decay_count += 1
 
-        if args.warmup == 'True':
-            warmup_scheduler.step(current_epoch)
+        # Increasing learning rate only once.
+        if args.increase_lr == 'True' and args.dataset == 'ilsvrc':
+            if decay_once is True and increase_once is False:
+                increase_str = increase_params[increase_count]
+                if my_optim.increase_lr(args, optimizer, current_epoch, increase_params=increase_str):
+                    decay_once = False
+                    increase_once = True
+                    increase_count += 1
 
         with open(os.path.join(args.snapshot_dir, 'train_record.csv'), 'a') as fw:
             for p_name, g in zip(op_params_list, optimizer.param_groups):
@@ -137,7 +167,7 @@ def train(args):
 
         save_flag = True
 
-        for idx, dat in enumerate(train_loader):
+        for idx, dat in enumerate(train_loader):  # len(train_loader) = how many batchs in train_loader
             global_counter += 1
 
             img_path, img, label = dat
@@ -145,7 +175,7 @@ def train(args):
             input_img, label = input_img.to(args.device), label.to(args.device)
 
             logits = None
-            logits_hg = None
+            # logits_hg = None
             sc_maps_fo = None
             sc_maps_so = None
             pred_sos = None
@@ -154,17 +184,16 @@ def train(args):
             # forward pass
             if args.mode == 'spa':
                 logits, _, _ = model(x=input_img, cur_epoch=current_epoch)
-            if args.mode == 'spa+hinge':
-                logits, logits_hg, _, _ = model(x=input_img, cur_epoch=current_epoch)
+            # if args.mode == 'spa+hinge':
+            #     logits, logits_hg, _, _ = model(x=input_img, cur_epoch=current_epoch)
             if args.mode == 'spa+sa':
                 logits, _, _ = model(x=input_img, cur_epoch=current_epoch)
             if args.mode == 'sos':
                 logits, pred_sos, sc_maps_fo, sc_maps_so = model(x=input_img, cur_epoch=current_epoch)
             if 'sos+sa' in args.mode:
                 logits, pred_sos, sc_maps_fo, sc_maps_so = model(x=input_img, cur_epoch=current_epoch)
-            if args.mode == 'mc_sos':
-                logits, pred_sos, sc_maps_fo, sc_maps_so = model(x=input_img, cur_epoch=current_epoch)
-
+            # if args.mode == 'mc_sos':
+            #     logits, pred_sos, sc_maps_fo, sc_maps_so = model(x=input_img, cur_epoch=current_epoch)
             # if args.mode == 'rcst':
             #     logits, sc_maps_fo, sc_maps_so, rcst_map = model(input_img, cur_epoch=current_epoch)
             # if args.mode == 'sst':
@@ -195,9 +224,18 @@ def train(args):
             # loss_val, loss_ra, loss_so, loss_rc = model.module.get_loss(logits, label, pred_sos, gt_scm, rcst_map,
             #                                                             gt_rcst, epoch=current_epoch)
 
-            loss_params = {'cls_logits': logits, 'hg_logits': logits_hg, 'cls_label': label,
+            # loss_params = {'cls_logits': logits, 'hg_logits': logits_hg, 'cls_label': label,
+            #                'pred_sos': pred_sos, 'gt_sos': gt_scm, 'current_epoch': current_epoch}
+            # loss_val, loss_ra, loss_so, loss_hg, loss_spa = model.module.get_loss(loss_params)
+            loss_params = {'cls_logits': logits, 'cls_label': label,
                            'pred_sos': pred_sos, 'gt_sos': gt_scm, 'current_epoch': current_epoch}
-            loss_val, loss_ra, loss_so, loss_hg = model.module.get_loss(loss_params)
+            loss_val, loss_ra, loss_so = model.module.get_loss(loss_params)
+
+            if args.spa_loss == 'True' and args.spa_loss_start <= current_epoch:
+                bs, _, _, _ = logits.size()
+                gt_map = logits[torch.arange(bs), label.long(), ...]
+                loss_spa = model.module.get_sparse_loss(gt_map)
+                loss_val += loss_spa
 
             # write into tensorboard
             writer.add_scalar('loss_val', loss_val, global_counter)
@@ -205,14 +243,21 @@ def train(args):
             # network parameter update
             optimizer.zero_grad()
             loss_val.backward()
+
+            if args.warmup == 'True' and args.warmup_fun == 'cos' and decay_flag is False:
+                cos_scheduler.step(current_epoch + args.batch_size / steps_per_epoch)
+
             optimizer.step()
 
-            # global average pooling
-            cls_logits = model.module.thr_avg_pool(
-                logits) if (args.use_tap == 'True') and (args.tap_start <= current_epoch) else torch.mean(
-                torch.mean(logits, dim=2), dim=2)
+            # GAP or TAP
+            # cls_logits = model.module.thr_avg_pool(
+            #     logits) if (args.use_tap == 'True') and (args.tap_start <= current_epoch) else torch.mean(
+            #     torch.mean(logits, dim=2), dim=2)
 
-            hg_cls_logits = torch.mean(torch.mean(logits_hg, dim=2), dim=2) if 'hinge' in args.mode else None
+            # GAP
+            cls_logits =  torch.mean(torch.mean(logits, dim=2), dim=2)
+
+            # hg_cls_logits = torch.mean(torch.mean(logits_hg, dim=2), dim=2) if 'hinge' in args.mode else None
 
             if not args.onehot == 'True':
                 prec1, prec5 = evaluate.accuracy(cls_logits.data, label.long(), topk=(1, 5))
@@ -222,12 +267,18 @@ def train(args):
             losses.update(loss_val.data, input_img.size()[0])
             if 'sos' in args.mode:
                 losses_so.update(loss_so.data, input_img.size()[0])
-            if 'hinge' in args.mode:
-                losses_hg.update(loss_hg.data, input_img.size()[0])
+
+            # if 'hinge' in args.mode:
+            #     losses_hg.update(loss_hg.data, input_img.size()[0])
             # if 'rcst' in args.mode or 'sst' in args.mode:
             #     losses_rcst.update(loss_rc.data, input_img.size()[0])
+
             if args.ram:
                 losses_ra.update(loss_ra.data, input_img.size()[0])
+
+            if args.spa_loss == 'True' and current_epoch>=args.spa_loss_start:
+                losses_spa.update(loss_spa.data, input_img.size()[0])
+
             batch_time.update(time.time() - end)
 
             end = time.time()
@@ -251,12 +302,18 @@ def train(args):
                                                                                top1=top1, top5=top5)
                 if 'sos' in args.mode:
                     log_output += 'Loss_so {loss_so.val:.4f} ({loss_so.avg:.4f})\t'.format(loss_so=losses_so)
-                if 'hinge' in args.mode:
-                    log_output += 'Loss_hg {loss_hg.val:.4f} ({loss_hg.avg:.4f})\t'.format(loss_hg=losses_hg)
+
+                # if 'hinge' in args.mode:
+                #     log_output += 'Loss_hg {loss_hg.val:.4f} ({loss_hg.avg:.4f})\t'.format(loss_hg=losses_hg)
                 # if 'rcst' in args.mode or 'sst' in args.mode:
                 #     log_output += 'Loss_rc {loss_rc.val:.4f} ({loss_rc.avg:.4f})\t'.format(loss_rc=losses_rcst)
+
                 if args.ram:
                     log_output += 'Loss_ra {loss_ra.val:.4f} ({loss_ra.avg:.4f})\t'.format(loss_ra=losses_ra)
+
+                if args.spa_loss == 'True':
+                    log_output += 'Loss_spa {loss_spa.val:.4f} ({loss_spa.avg:.4f})\t'.format(loss_spa=losses_spa)
+
                 print(log_output)
                 writer.add_scalar('top1', top1.avg, global_counter)
                 writer.add_scalar('top5', top5.avg, global_counter)
@@ -275,9 +332,9 @@ def train(args):
                         watch_cls_logits = cls_logits[idx]
                         watch_img_path = im
                         watch_label = label.long()[idx]
-                        if 'hinge' in args.mode:
-                            watch_hg_cam = F.relu(logits_hg)[idx]
-                            watch_hg_cls_logits = hg_cls_logits[idx]
+                        # if 'hinge' in args.mode:
+                        #     watch_hg_cam = F.relu(logits_hg)[idx]
+                        #     watch_hg_cls_logits = hg_cls_logits[idx]
                         if 'sos' in args.mode and current_epoch >= args.sos_start:
                             watch_gt = [gt_scm[idx]]
                             watch_scm = [(sc_maps_fo[-2][idx], sc_maps_fo[-1][idx]),
@@ -295,13 +352,13 @@ def train(args):
                 save_sos(args, watch_trans_img, watch_sos, watch_img_path, current_epoch, suffix='sos')
                 save_sos(args, watch_trans_img, watch_gt, watch_img_path, current_epoch, suffix='gt_sos')
                 save_scm(args, watch_trans_img, watch_scm, watch_img_path, current_epoch, suffix='sc_4+5')
-            if 'hinge' in args.mode:
-                save_cam(args, watch_trans_img, watch_hg_cam, watch_hg_cls_logits, watch_img_path, watch_label,
-                         current_epoch, suffix='cam_hg')
+            # if 'hinge' in args.mode:
+            #     save_cam(args, watch_trans_img, watch_hg_cam, watch_hg_cls_logits, watch_img_path, watch_label,
+            #              current_epoch, suffix='cam_hg')
 
         # training end
         current_epoch += 1
-        if (current_epoch % 10 == 0 and args.dataset=='cub') or (current_epoch % 4 == 0 and args.dataset=='ilsvrc') or current_epoch == total_epoch:
+        if (current_epoch % 10 == 0 and args.dataset=='cub') or (args.dataset=='ilsvrc') or current_epoch == total_epoch:
             save_checkpoint(args,
                             {'epoch': current_epoch,
                              'arch': args.arch,
@@ -319,30 +376,46 @@ def train(args):
             if 'sos' in args.mode:
                 log_output += '{:.4f} \t'.format(losses_so.avg)
                 writer.add_scalar('sos_loss', losses_so.avg, current_epoch)
-            if 'hinge' in args.mode:
-                log_output += '{:.4f} \t'.format(losses_hg.avg)
-                writer.add_scalar('hinge_loss', losses_hg.avg, current_epoch)
+            # if 'hinge' in args.mode:
+            #     log_output += '{:.4f} \t'.format(losses_hg.avg)
+            #     writer.add_scalar('hinge_loss', losses_hg.avg, current_epoch)
             # if 'rcst' in args.mode or 'sst' in args.mode:
             #     log_output += '{:.4f} \t'.format(losses_rcst.avg)
             if args.ram:
                 log_output += '{:.4f}'.format(losses_ra.avg)
                 writer.add_scalar('ram_loss', losses_ra.avg, current_epoch)
-                # while ram_loss > 0.35, learning rate decay
-                if args.decay_points == 'none' and decay_flag is False and losses_ra.avg >= 0.35 and current_epoch >= 65:
-                    decay_flag = True
+
+                if args.dataset == 'cub':  # while ram_loss > 0.30, learning rate decay
+                    if args.decay_points == 'none' and decay_flag is False and losses_ra.avg >= 0.30 and current_epoch >= 80:
+                        decay_flag = True
+                    elif args.decay_points == 'none' and decay_flag is False and current_epoch >= 100:
+                        decay_flag = True
+                if args.dataset == 'ilsvrc':
+                    pass
+
+            if args.spa_loss == 'True':
+                log_output += '{:.4f} \t'.format(losses_spa.avg)
+                writer.add_scalar('spa_loss', losses_spa.avg, current_epoch)
+
             log_output += '\n'
             fw.write(log_output)
 
         losses.reset()
-        # if 'sos' in args.mode or 'sst' in args.mode:
+
         if 'sos' in args.mode:
             losses_so.reset()
-        if 'hinge' in args.mode:
-            losses_hg.reset()
+
+        # if 'hinge' in args.mode:
+        #     losses_hg.reset()
         # if 'rcst' in args.mode or 'sst' in args.mode:
         #     losses_rcst.reset()
+
         if args.ram:
             losses_ra.reset()
+
+        if args.spa_loss == 'True':
+            losses_spa.reset()
+
         top1.reset()
         top5.reset()
 

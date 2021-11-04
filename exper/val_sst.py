@@ -116,11 +116,11 @@ def val(args):
             #     pass
 
             # global average pooling
-            if args.use_tap == 'True':
-                cls_logits = model.module.thr_avg_pool(logits)
-            else:
-                cls_logits = torch.mean(torch.mean(logits, dim=2), dim=2)  # (n, 200)
-
+            # if args.use_tap == 'True':
+            #     cls_logits = model.module.thr_avg_pool(logits)
+            # else:
+            #     cls_logits = torch.mean(torch.mean(logits, dim=2), dim=2)  # (n, 200)
+            cls_logits = torch.mean(torch.mean(logits, dim=2), dim=2)  # (n, 200)
             cls_logits = F.softmax(cls_logits, dim=1)  # shape of cls_logits:(10,200)
             if args.tencrop == 'True':
                 cls_logits = cls_logits.view(1, ncrops, -1).mean(1)
