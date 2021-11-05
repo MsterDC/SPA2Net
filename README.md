@@ -68,7 +68,7 @@ You need to double-check each time when you run it to ensure that all parameters
 
 ***
 
-## :art: [All Archictures]
+<!-- ## :art: [All Archictures]
 ### :heavy_check_mark: SOS+SA v3 is the final version (At the end).
 
 <div align="center">
@@ -110,5 +110,5 @@ You need to double-check each time when you run it to ensure that all parameters
 <div align="center">
   <img src="https://github.com/KevinDongDong/WGOL-TPAMI/blob/main/images/SOS%2BSA%E7%BD%91%E7%BB%9C%E7%BB%93%E6%9E%84_3.png" width="633" />
   <p>SOS+SA v3 (Final Version)</p>
-</div>
+</div> -->
 
