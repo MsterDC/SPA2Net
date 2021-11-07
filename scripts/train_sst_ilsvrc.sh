@@ -29,8 +29,8 @@ python train_sst.py \
     --sa_edge_weight=1 \
     --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_wp_#23 \
     --log_dir=../log/ilsvrc/vgg16_sos+sa_v3_wp_#23 \
-    --batch_size=2048 \
-    --gpus=0,1,2,3 \
+    --batch_size=1024 \
+    --gpus=0,1,2,3,4,5,6,7 \
     --epoch=20 \
     --load_finetune=True \
     --pretrained_model=ilsvrc_epoch_20.pth.tar \
@@ -42,7 +42,7 @@ python train_sst.py \
     --increase_points=8 \
     --lr=0.001 \
     --cls_lr=0.01 \
-    --sos_lr=0.00005 \
+    --sos_lr=0.0002 \
     --sa_lr=0.01 \
     --spa_loss=False \
     --spa_loss_weight=0.0001 \
