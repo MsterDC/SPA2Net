@@ -43,7 +43,7 @@ python train_sst.py \
     --lr=0.001 \
     --cls_lr=0.01 \
     --sos_lr=0.0002 \
-    --sa_lr=0.01 \
+    --sa_lr=0.005 \
     --spa_loss=False \
     --spa_loss_weight=0.0001 \
     --spa_loss_start=20 \
