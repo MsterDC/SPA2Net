@@ -8,7 +8,6 @@ PyTorch implementation for SPA-Net.
 * [GoogleDrive](https://drive.google.com/file/d/1BXrgBA09eGZ3UvtFJYYm3FfPDScKA5-g/view?usp=sharing)
 * After downloading, put the model into `snapshots/ilsvrc/vgg16_spa_#1/`
 
-### :mag: For a more detailed explanation of each parameter, please refer to the [`HELP.md`](HELP.md).
 ### Switch to the `scripts` directory and execute the following shell code:
 
 :fire: Train
@@ -31,6 +30,7 @@ bash ./test_vgg_ilsvrc.sh  # For VGG-16 test on ILSVRC
 bash ./test_inceptionv3_ilsvrc.sh  # For Inception V3 test on ILSVRC
 ```
 
+### :mag: For a more detailed explanation of each parameter, please refer to the [`HELP.md`](HELP.md).
 
 <!-- ### :pushpin: [Tips]
 * There is not dataset directory so you need to create after executing `git clone`.
