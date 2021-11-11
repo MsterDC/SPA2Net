@@ -8,7 +8,7 @@ PyTorch implementation for SPA-Net.
 * [GoogleDrive](https://drive.google.com/file/d/1BXrgBA09eGZ3UvtFJYYm3FfPDScKA5-g/view?usp=sharing)
 * After downloading, put the model into `snapshots/ilsvrc/vgg16_spa_#1/`
 
-### :mag: For a more detailed explanation of each parameter, please refer to the [`CONFIG.md`](CONFIG.md).
+### :mag: For a more detailed explanation of each parameter, please refer to the [`HELP.md`](HELP.md).
 ### Switch to the `scripts` directory and execute the following shell code:
 
 :fire: Train
