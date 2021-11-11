@@ -8,35 +8,31 @@ PyTorch implementation for SPA-Net.
 * [GoogleDrive](https://drive.google.com/file/d/1BXrgBA09eGZ3UvtFJYYm3FfPDScKA5-g/view?usp=sharing)
 * After downloading, put the model into `snapshots/ilsvrc/vgg16_spa_#1/`
 
+### :mag: For a more detailed explanation of each parameter, please refer to the [`CONFIG.md`](CONFIG.md).
 ### Switch to the `scripts` directory and execute the following shell code:
 
-:fire: For training
+:fire: Train
 ```shell
-bash ./train_sst_cub.sh  # For CUB-200-2011
+bash ./train_vgg_cub.sh  # For VGG-16 trained on CUB-200-2011
+bash ./train_inceptionv3_cub.sh  # For Inception V3 trained on CUB-200-2011
 ```
 ```shell
-bash ./train_sst_ilsvrc.sh  # For ILSVRC
+bash ./train_vgg_ilsvrc.sh  # For VGG-16 trained on ILSVRC
+bash ./train_inceptionv3_ilsvrc.sh  # For Inception V3 trained on ILSVRC
 ```
 
-:fire: For testing 
+:fire: Test 
 ```shell
-bash ./val_sst_cub.sh  # Serial version for CUB
+bash ./test_vgg_cub.sh  # For VGG-16 test on CUB-200-2011
+bash ./test_inceptionv3_cub.sh  # For Inception V3 test on CUB-200-2011
 ```
 ```shell
-bash ./val_sst_cub_parallel.sh  # Multi-threaded serial test version for CUB
-```
-```shell
-bash ./val_sst_cub_quick.sh  # Quick Version for CUB (**Recommend**)
-```
-```shell
-bash ./val_sst_ilsvrc.sh  # Serial version for ILSVRC
-```
-```shell
-bash ./val_sst_ilsvrc_quick.sh  # Quick Version for ILSVRC (**Recommend**)
+bash ./test_vgg_ilsvrc.sh  # For VGG-16 test on ILSVRC
+bash ./test_inceptionv3_ilsvrc.sh  # For Inception V3 test on ILSVRC
 ```
 
 
-### :pushpin: [Tips]
+<!-- ### :pushpin: [Tips]
 * There is not dataset directory so you need to create after executing `git clone`.
 * Please use the parameter `mode` (Type: String) to control the method you want to train or test. 
 * The currently supported `mode` include: `spa` / `spa+sa` / `sos` / `sos+sa_v1` / `sos+sa_v2` / `sos+sa_v3`(Default).
@@ -59,11 +55,9 @@ Before executing the script `each time`, you may need to confirm `all` the param
 * The script `val_sst_*_quick.sh` is used by `default` to test the model.
 * Take `val_sst_ilsvrc_quick.sh` as an example, you need to pay attention to the code on `line 20` and **after**. 
 You need to double-check each time when you run it to ensure that all parameters are correctly configured.
-* The parameters **before** the `20th line` are the default settings, you do not need to change them.
+* The parameters **before** the `20th line` are the default settings, you do not need to change them. -->
 
-## :mag: For a more detailed explanation of each parameter, please refer to the [`CONFIG.md`](CONFIG.md).
-
-***
+<!-- *** -->
 
 <!-- ## :art: [All Archictures]
 ### :heavy_check_mark: SOS+SA v3 is the final version (At the end).
