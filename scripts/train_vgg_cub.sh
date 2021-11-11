@@ -30,6 +30,7 @@ python train_sst.py \
     --log_dir=../log/vgg16_sos+sa_v3_#36 \
     --epoch=150 \
     --decay_points=none \
+    --decay_module=bb,cls,sa \
     --batch_size=64 \
     --gpus=0,1,2,3 \
     --lr=0.001 \

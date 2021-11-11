@@ -12,9 +12,6 @@ python train_sst.py \
     --scg_blocks=4,5 \
     --scg_fosc_th=0.2 \
     --scg_sosc_th=0.5 \
-    --ram_th_bg=0.1 \
-    --ram_bg_fg_gap=0.2 \
-    --ram_start=20 \
     --sos_start=5 \
     --sos_gt_seg=True \
     --sos_seg_method=TC \
@@ -23,15 +20,16 @@ python train_sst.py \
     --sos_bg_th=0.1 \
     --sa_use_edge=True \
     --sa_edge_stage=4,5 \
-    --sa_start=40 \
+    --sa_start=20 \
     --sa_head=8 \
     --sa_neu_num=768 \
     --pretrained_model=inception_v3_google.pth \
     --pretrained_model_dir=../pretrained_models \
-    --snapshot_dir=../snapshots/inceptionv3_spa_#2 \
-    --log_dir=../log/inceptionv3_spa_#2 \
+    --snapshot_dir=../snapshots/inceptionv3_spa_#4 \
+    --log_dir=../log/inceptionv3_spa_#4 \
     --epoch=100 \
     --decay_points=80 \
+    --decay_module=bb,cls,sa \
     --batch_size=64 \
     --gpus=0,1,2,3 \
     --lr=0.001 \
@@ -43,6 +41,9 @@ python train_sst.py \
     --spa_loss_start=20 \
     --sos_loss_weight=0.5 \
     --ram \
-    --ra_loss_weight=0.5 \
+    --ra_loss_weight=0.1 \
+    --ram_th_bg=0.1 \
+    --ram_bg_fg_gap=0 \
+    --ram_start=20 \
     --mode=spa \
     --watch_cam \
