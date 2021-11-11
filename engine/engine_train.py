@@ -61,6 +61,8 @@ class opts(object):
         self.parser.add_argument("--batch_size", type=int, default=64)
         self.parser.add_argument("--epoch", type=int, default=100)
         self.parser.add_argument("--decay_points", type=str, default='80', help='default 80 on CUB and 10,15 on ILSVRC.')
+        self.parser.add_argument("--decay_module", type=str, default='bb,cls,sa;bb,cls,sa', help='set decayed modules, default set for ILSVRC.')
+
         self.parser.add_argument("--warmup", type=str, default='False', help='switch use warmup training strategy.')
         self.parser.add_argument("--warmup_fun", type=str, default='gra', help='gra / cos')
 
@@ -193,6 +195,29 @@ def save_checkpoint(args, state, is_best, filename='checkpoint.pth.tar'):
     if is_best:
         shutil.copyfile(savepath, os.path.join(args.snapshot_dir, 'model_best.pth.tar'))
 
+def set_decay_modules(decay_module):
+    # set parameter_lr for decay and increasing
+    # 0,1 / 2,3 / 4,5 / 6,7 => bb / cls / sos / sa, 'all' for all
+    # only used for ILSVRC now.
+    decay_field = decay_module.split(';')
+    if decay_field == '':
+        raise Exception("[Error] Must specify the decayed modules at first.")
+    decay_idx = []
+    for field in decay_field:
+        if 'bb' in field:
+            decay_idx += '0,1'
+        if 'cls' in field:
+            decay_idx += ',2,3'
+        if 'sos' in field:
+            decay_idx += ',4,5'
+        if 'sa' in field:
+            decay_idx += ',6,7'
+        if field == 'all':
+            decay_idx += 'all'
+        decay_idx += ';'
+    decay_params = ''.join(decay_idx).strip(';').split(';')
+    decay_params.append(None)
+    return decay_params
 
 def reproducibility_set(args):
     # for reproducibility
