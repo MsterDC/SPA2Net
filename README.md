@@ -1,9 +1,6 @@
 # SPA-Net
 PyTorch implementation for SPA-Net.
 
-## 🔥  Update(2021.10.10): new added [SCHEDULE.md](https://github.com/MsterDC/SSA-TPAMI/blob/main/scripts/SCHEDULE.md) in path `scripts/`
-* Please refer to the [file](https://github.com/MsterDC/SSA-TPAMI/blob/main/scripts/SCHEDULE.md) for details of next training task.
-
 ## :gear: Quick Start: Train & Test
 
 ### Download fine-tuned classification model for training on `ILSVRC`.
