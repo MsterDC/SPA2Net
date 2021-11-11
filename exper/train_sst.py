@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 from tensorboardX import SummaryWriter
 
-from engine.engine_train import get_model, opts, save_checkpoint, reproducibility_set, log_init, warmup_init
+from engine.engine_train import get_model, opts, save_checkpoint, reproducibility_set, log_init, warmup_init, set_decay_modules
 from engine.engine_loader import data_loader
 import engine.engine_optim as my_optim
 from utils import evaluate
@@ -59,15 +59,7 @@ def train(args):
         if args.warmup_fun == 'gra':
             gra_scheduler = warmup_init(args, optimizer, op_params_list)
 
-    # set parameter_lr for decay and increasing
-    # 0,1 / 2,3 / 4,5 / 6,7 => bb / cls / sos / sa, 'all' for all
-    # only used for ILSVRC now.
-    if args.dataset == 'ilsvrc':
-        decay_params = ['0,1,2,3,6,7', '0,1,2,3,6,7', None]
-    elif args.dataset == 'cub':
-        decay_params = ['0,1,2,3,6,7', None]
-    else:
-        raise Exception("Wrong dataset, please check !")
+    decay_params = set_decay_modules(args.decay_module)
 
     if args.increase_lr == 'True':
         increase_params = [None]
