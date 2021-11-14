@@ -377,6 +377,27 @@ class Inception3(nn.Module):
         out1 = self.cls_fc8(x)
         return out1
 
+    # def hsc(self, f_phi, fo_th=0.1, so_th=0.1, order=2):
+    #     n, c_nl, h, w = f_phi.size()
+    #     f_phi = f_phi.permute(0, 2, 3, 1).contiguous().view(n, -1, c_nl)
+    #     f_phi_normed = f_phi / (torch.norm(f_phi, dim=2, keepdim=True) + 1e-10)
+    #
+    #     # first order
+    #     non_local_cos = F.relu(torch.matmul(f_phi_normed, f_phi_normed.transpose(1, 2)))
+    #     non_local_cos[non_local_cos < fo_th] = 0
+    #     non_local_cos_fo = non_local_cos.clone()
+    #
+    #     # high order
+    #     non_local_cos[:, torch.arange(h * w), torch.arange(w * h)] = 0
+    #     non_local_cos_ho = non_local_cos.clone()
+    #     for _ in range(order - 1):
+    #         non_local_cos_ho[:, torch.arange(h * w), torch.arange(w * h)] = 0
+    #         non_local_cos_ho = torch.matmul(non_local_cos_ho, non_local_cos)
+    #     non_local_cos_ho = non_local_cos_ho - torch.min(non_local_cos_ho, dim=1, keepdim=True)[0]
+    #     non_local_cos_ho = non_local_cos_ho / (torch.max(non_local_cos_ho, dim=1, keepdim=True)[0] + 1e-10)
+    #     non_local_cos_ho[non_local_cos_ho < so_th] = 0
+    #     return non_local_cos_fo, non_local_cos_ho
+
     def hsc(self, f_phi, fo_th=0.2, so_th=1, order=2):
         n, c_nl, h, w = f_phi.size()
         f_phi = f_phi.permute(0, 2, 3, 1).contiguous().view(n, -1, c_nl)
