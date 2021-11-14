@@ -8,10 +8,6 @@ python train_sst.py \
     --img_dir=../data/CUB_200_2011/images \
     --train_list=../data/CUB_200_2011/list/train.txt \
     --num_classes=200 \
-    --scg_com \
-    --scg_blocks=4,5 \
-    --scg_fosc_th=0.2 \
-    --scg_sosc_th=0.5 \
     --sos_start=5 \
     --sos_gt_seg=True \
     --sos_seg_method=TC \
@@ -25,17 +21,21 @@ python train_sst.py \
     --sa_neu_num=768 \
     --pretrained_model=inception_v3_google.pth \
     --pretrained_model_dir=../pretrained_models \
-    --snapshot_dir=../snapshots/inceptionv3_spa_#4 \
-    --log_dir=../log/inceptionv3_spa_#4 \
+    --snapshot_dir=../snapshots/inceptionv3_spa_#10 \
+    --log_dir=../log/inceptionv3_spa_#10 \
     --epoch=100 \
     --decay_points=80 \
-    --decay_module=bb,cls,sa \
-    --batch_size=64 \
+    --decay_module=bb,cls \
+    --batch_size=256 \
     --gpus=0,1,2,3 \
-    --lr=0.001 \
-    --cls_lr=0.01 \
+    --lr=0.01 \
+    --cls_lr=0.1 \
     --sos_lr=0.01 \
     --sa_lr=0.01 \
+    --scg_com \
+    --scg_blocks=4,5 \
+    --scg_fosc_th=0.2 \
+    --scg_sosc_th=0.5 \
     --spa_loss=False \
     --spa_loss_weight=0.0001 \
     --spa_loss_start=20 \
