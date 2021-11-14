@@ -401,7 +401,7 @@ def eval_loc_all(args, loc_params):
             locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
                 eval_loc_scg(cls_logits, top_maps, gt_known_maps, sc_com, label_in,
                              gt_boxes, crop_size=args.crop_size, topk=5, threshold=th, mode='union',
-                             fg_th=0.1, bg_th=0.05, iou_th=args.iou_th, sc_maps_fo=None)
+                             fg_th=0.05, bg_th=0.05, iou_th=args.iou_th, sc_maps_fo=None)
         if args.scg_version == 'v2':
             locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
                 eval_loc_scg_v2(cls_logits, top_maps, gt_known_maps, sc_com, label_in,
@@ -443,8 +443,9 @@ def eval_loc_all(args, loc_params):
         else:
             raise Exception("[Error] HSC must be calculated by 4 or 5 stage feature of backbone.")
 
+        # Visualization for localization map and self-correlation map.
         debug_vis_loc(args, idx, show_idxs, img_path, top_maps_scg, top5_boxes_scg, label_in.data.long().numpy(), gt_boxes, detail_scg, suffix='scg')
-        debug_vis_sc(args, idx, show_idxs, img_path, sc_maps_fo_fuse, sc_maps_so_fuse, sc_com, label_in.data.long().numpy(), detail_scg, suffix=suffix_sc)
+        # debug_vis_sc(args, idx, show_idxs, img_path, sc_maps_fo_fuse, sc_maps_so_fuse, sc_com, label_in.data.long().numpy(), detail_scg, suffix=suffix_sc)
 
         # SOS localization
         if 'sos' in args.mode:
@@ -470,6 +471,7 @@ def eval_loc_all(args, loc_params):
             detail_sos = {'cls_wrong': cls_wrong_sos, 'multi_instances': multi_instances_sos,
                           'region_part': region_part_sos, 'region_more': region_more_sos,
                           'region_wrong': region_wrong_sos}
+
             debug_vis_loc(args, idx, show_idxs, img_path, top_sos_maps, top5_sos_boxes, label_in.data.long().numpy(),
                           gt_boxes, detail_sos, suffix='sos')
     return loc_err

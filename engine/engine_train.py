@@ -63,8 +63,10 @@ class opts(object):
         self.parser.add_argument("--decay_points", type=str, default='80', help='default 80 on CUB and 10,15 on ILSVRC.')
         self.parser.add_argument("--decay_module", type=str, default='bb,cls,sa;bb,cls,sa', help='set decayed modules, default set for ILSVRC.')
 
+
         self.parser.add_argument("--warmup", type=str, default='False', help='switch use warmup training strategy.')
         self.parser.add_argument("--warmup_fun", type=str, default='gra', help='gra / cos')
+        self.parser.add_argument("--aba_params", type=str, default='', help='temp experiment params')
 
         self.parser.add_argument("--scg_order", type=int, default=2, help='the order of similarity of HSC.')
         self.parser.add_argument("--scg_com", action='store_true', help='switch on second order supervised.')
@@ -281,10 +283,24 @@ def warmup_init(args, optimizer, op_params_list):
 
     if args.warmup_fun == 'gra':
         if args.dataset == 'ilsvrc':
+            aba_params = []
+            aba_list = args.aba_params.strip().split(',')
+            if 'bb' in aba_list:
+                aba_params.append('other_weight')
+                aba_params.append('other_bias')
+            if 'cls' in aba_list:
+                aba_params.append('cls_weight')
+                aba_params.append('cls_bias')
+            if 'sa' in aba_list:
+                aba_params.append('sa_weight')
+                aba_params.append('sa_bias')
+
+            fine_tune_params = list(set(op_params_list) - (set(aba_params)))
             wp_period = [2,2,2]
             wp_node = [0,3,6]
             wp_ps = [['sos_weight', 'sos_bias'],
-                     ['sa_weight', 'sa_bias'],op_params_list]
+                     ['sa_weight', 'sa_bias'], fine_tune_params]
+
         elif args.dataset == 'cub':
             raise Exception("on cub-200, LR decay is unused.")
 

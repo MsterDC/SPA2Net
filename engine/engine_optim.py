@@ -57,7 +57,6 @@ def get_adam(args, model):
 def reduce_lr(args, optimizer, epoch, factor=0.1, decay_params=None):
     if decay_params is not None:
         decay_params = decay_params.strip().split(',')
-        # print(decay_params)
 
     if args.decay_points == 'none':
         points = [str(epoch)]
