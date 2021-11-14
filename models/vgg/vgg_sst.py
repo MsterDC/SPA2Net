@@ -176,8 +176,6 @@ class VGG(nn.Module):
         return spa_loss * self.args.spa_loss_weight
 
     def get_sos_loss(self, pre_hm, gt_hm, label):
-        # if 'mc_sos' in self.args.mode:
-        #     pre_hm = pre_hm[torch.arange(pre_hm.shape[0]), label.long(), ...]  # (n, w, h)
         if self.args.sos_gt_seg == 'False' or self.args.sos_loss_method == 'MSE':
             return self.mse_loss(pre_hm, gt_hm)
         if self.args.sos_seg_method == 'TC':
