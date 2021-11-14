@@ -22,7 +22,7 @@ def debug_vis_loc(args, idx, show_idxs, img_path, top_maps, top5_boxes, label, g
         for show_id in show_idxs:
             save_im_heatmap_box(img_path[show_id], top_maps[show_id], top5_boxes[show_id], debug_dir,
                                 gt_label=label[show_id], gt_box=gt_boxes[show_id],
-                                epoch=args.current_epoch, threshold=args.threshold[1], suffix=suffix)
+                                epoch=args.current_epoch, threshold=args.threshold[0], suffix=suffix)
             pass
     pass
 
