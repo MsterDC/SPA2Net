@@ -13,8 +13,8 @@ python test_sst.py \
     --sos_loss_method=BCE \
     --sa_use_edge=True \
     --sa_edge_stage=4,5 \
-    --snapshot_dir=../snapshots/inceptionv3_spa_#9 \
-    --debug_dir=../debug/inceptionv3_spa_#9_t1 \
+    --snapshot_dir=../snapshots/inceptionv3_spa_#10 \
+    --debug_dir=../debug/inceptionv3_spa_#10_tt \
     --batch_size=15 \
     --restore_from=cub_epoch_100.pth.tar \
     --threshold=0.05,0.1,0.15,0.2,0.25 \
