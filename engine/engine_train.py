@@ -60,9 +60,8 @@ class opts(object):
         self.parser.add_argument("--gpus", type=str, default='0', help='-1 for cpu, split gpu id by comma')
         self.parser.add_argument("--batch_size", type=int, default=64)
         self.parser.add_argument("--epoch", type=int, default=100)
-        self.parser.add_argument("--decay_points", type=str, default='80', help='default 80 on CUB and 10,15 on ILSVRC.')
-        self.parser.add_argument("--decay_module", type=str, default='bb,cls,sa;bb,cls,sa', help='set decayed modules, default set for ILSVRC.')
-
+        self.parser.add_argument("--decay_points", type=str, default='none', help='default none on CUB and 12,14 on ILSVRC.')
+        self.parser.add_argument("--decay_module", type=str, default='bb,cls,sa;bb,cls,sa', help='LR decayed modules, default set for ILSVRC.')
 
         self.parser.add_argument("--warmup", type=str, default='False', help='switch use warmup training strategy.')
         self.parser.add_argument("--warmup_fun", type=str, default='gra', help='gra / cos')
@@ -281,6 +280,7 @@ def warmup_init(args, optimizer, op_params_list):
             cos_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=4, T_mult=1)
         return cos_scheduler
 
+    # set warm-up module
     if args.warmup_fun == 'gra':
         if args.dataset == 'ilsvrc':
             aba_params = []
