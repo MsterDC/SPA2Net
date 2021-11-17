@@ -60,12 +60,13 @@ class opts(object):
         self.parser.add_argument("--gpus", type=str, default='0', help='-1 for cpu, split gpu id by comma')
         self.parser.add_argument("--batch_size", type=int, default=64)
         self.parser.add_argument("--epoch", type=int, default=100)
-        self.parser.add_argument("--decay_points", type=str, default='none', help='default none on CUB and 12,14 on ILSVRC.')
-        self.parser.add_argument("--decay_module", type=str, default='bb,cls,sa;bb,cls,sa', help='LR decayed modules, default set for ILSVRC.')
+
+        self.parser.add_argument("--decay_points", type=str, default='none', help='using none on CUB as default. On ILSVRC, 12,14 is default setting.')
+        self.parser.add_argument("--decay_module", type=str, default='bb,cls,sa;bb,cls,sa', help='using on ILSVRC as default, decay-LR modules')
 
         self.parser.add_argument("--warmup", type=str, default='False', help='switch use warmup training strategy.')
-        self.parser.add_argument("--warmup_fun", type=str, default='gra', help='gra / cos')
-        self.parser.add_argument("--aba_params", type=str, default='', help='temp experiment params')
+        self.parser.add_argument("--warmup_fun", type=str, default='gra', help='using on ILSVRC, op: gra / cos')
+        self.parser.add_argument("--aba_params", type=str, default='', help='excluded modules to warmup. Using [,] for split')
 
         self.parser.add_argument("--scg_order", type=int, default=2, help='the order of similarity of HSC.')
         self.parser.add_argument("--scg_com", action='store_true', help='switch on second order supervised.')
@@ -76,7 +77,7 @@ class opts(object):
 
         self.parser.add_argument("--lr", type=float, default=LR)
         self.parser.add_argument("--cls_lr", type=float, default=CLS_LR)
-        self.parser.add_argument("--sos_lr", type=float, default=0.001)
+        self.parser.add_argument("--sos_lr", type=float, default=0.00005)
         self.parser.add_argument("--sa_lr", type=float, default=0.001)
 
         self.parser.add_argument("--ram", action='store_true', help='switch on restricted activation module.')

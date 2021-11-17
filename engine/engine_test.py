@@ -77,6 +77,8 @@ class opts(object):
 
         self.parser.add_argument("--mode", type=str, default='sos+sa_v3')
         self.parser.add_argument("--debug", action='store_true', help='.')
+        self.parser.add_argument("--debug_num", type=int, default=10, help='visualization number, eg, 100')
+        self.parser.add_argument("--debug_only", action='store_true', help='debug until debug_num')
 
     def parse(self):
         opt = self.parser.parse_args()
@@ -429,8 +431,8 @@ def eval_loc_all(args, loc_params):
                       'region_wrong': region_wrong_scg}
 
         if args.scg_blocks == '4,5':
-            sc_maps_fo_fuse = sc_maps_fo[-2] + sc_maps_fo[-1]  # fo from stage 4 and 5
-            sc_maps_so_fuse = sc_maps_so[-2] + sc_maps_so[-1]  # so from stage 4 and 5
+            sc_maps_fo_fuse = sc_maps_fo[-2] + sc_maps_fo[-1]  # add fo from stage 4 and 5
+            sc_maps_so_fuse = sc_maps_so[-2] + sc_maps_so[-1]  # add so from stage 4 and 5
             suffix_sc = ['fo_45', 'so_45', 'com45']
         elif args.scg_blocks == '4':
             sc_maps_fo_fuse = sc_maps_fo[-2]
@@ -474,6 +476,13 @@ def eval_loc_all(args, loc_params):
 
             debug_vis_loc(args, idx, show_idxs, img_path, top_sos_maps, top5_sos_boxes, label_in.data.long().numpy(),
                           gt_boxes, detail_sos, suffix='sos')
+
+    base_num = (args.debug_num // args.batch_size) if (args.debug_num % args.batch_size) == 0 \
+        else (args.debug_num // args.batch_size) + 1
+    if args.debug_only and idx >= base_num:
+        print("Debug-Only Mode: Mission Complete.")
+        sys.exit(0)
+
     return loc_err
 
 
