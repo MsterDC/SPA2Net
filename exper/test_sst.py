@@ -44,7 +44,7 @@ def val(args):
     show_idxs = None
     if args.debug:
         np.random.seed(2333)
-        show_idxs = np.arange(10)
+        show_idxs = np.arange(args.batch_size)
         np.random.shuffle(show_idxs)
         show_idxs = show_idxs[:]
 
