@@ -63,7 +63,7 @@ class opts(object):
 
         self.parser.add_argument("--snapshot_dir", type=str, default='../snapshots')
         self.parser.add_argument("--debug_dir", type=str, default='../debug', help='save visualization results.')
-        self.parser.add_argument("--threshold", type=str, default='0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5')
+        self.parser.add_argument("--threshold", type=str, default='0.1,0.5', help='value range of threshold')
         self.parser.add_argument("--gpus", type=str, default='0', help='-1 for cpu, split gpu id by comma')
 
         self.parser.add_argument("--sos_seg_method", type=str, default='TC', help='BC / TC')
@@ -85,7 +85,15 @@ class opts(object):
         opt.gpus_str = opt.gpus
         opt.gpus = list(map(int, opt.gpus.split(',')))
         opt.gpus = [i for i in range(len(opt.gpus))] if opt.gpus[0] >= 0 else [-1]
-        opt.threshold = list(map(float, opt.threshold.split(',')))
+        th_range = list(map(float, opt.threshold.split(',')))
+        if len(th_range) != 2:
+            raise Exception('[Error] You should specify the value range of threshold.')
+        opt.threshold = []
+        for th in np.arange(th_range[0], th_range[-1], 0.05):
+            opt.threshold.append(round(float(th), 2))
+        opt.threshold.append(th_range[-1])
+        for th in opt.threshold:
+            print("Threshold:", th, end=',')
         return opt
 
 
@@ -349,7 +357,6 @@ def eval_loc_all(args, loc_params):
     # pred_sos: 20 * 14 * 14
 
     for th in args.threshold:
-
         locerr_1, locerr_5, gt_known_locerr, top_maps, top5_boxes, gt_known_maps, top1_wrong_detail = \
             eval_loc(args, cls_logits, loc_map, label_in, gt_boxes, crop_size=args.crop_size, topk=5,
                      threshold=th, mode='union', iou_th=args.iou_th)
