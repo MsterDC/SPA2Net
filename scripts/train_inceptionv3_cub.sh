@@ -21,17 +21,17 @@ python train_sst.py \
     --sa_neu_num=768 \
     --pretrained_model=inception_v3_google.pth \
     --pretrained_model_dir=../pretrained_models \
-    --snapshot_dir=../snapshots/inceptionv3_spa_#10 \
-    --log_dir=../log/inceptionv3_spa_#10 \
+    --snapshot_dir=../snapshots/inceptionv3_spa_#13 \
+    --log_dir=../log/inceptionv3_spa_#13 \
     --epoch=100 \
     --decay_points=80 \
     --decay_module=bb,cls \
-    --batch_size=256 \
+    --batch_size=128 \
     --gpus=0,1,2,3 \
     --lr=0.01 \
     --cls_lr=0.1 \
-    --sos_lr=0.01 \
-    --sa_lr=0.01 \
+    --sos_lr=0.0005 \
+    --sa_lr=0.05 \
     --scg_com \
     --scg_blocks=4,5 \
     --scg_fosc_th=0.2 \
