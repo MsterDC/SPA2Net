@@ -11,10 +11,10 @@ python test_sst.py \
     --num_classes=1000 \
     --scg_com \
     --scg_blocks=4,5 \
-    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_wp_#33 \
-    --debug_dir=../debug/ilsvrc/vgg16_sos+sa_v3_wp_#33_t1 \
-    --batch_size=10 \
-    --restore_from=ilsvrc_epoch_20.pth.tar \
+    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_wp_#36 \
+    --debug_dir=../debug/ilsvrc/vgg16_sos+sa_v3_wp_#36_t2 \
+    --batch_size=18 \
+    --restore_from=ilsvrc_epoch_15.pth.tar \
     --scg_fosc_th=0.2 \
     --scg_sosc_th=1 \
     --gpus=3 \

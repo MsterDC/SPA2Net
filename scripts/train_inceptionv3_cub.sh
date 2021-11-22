@@ -21,16 +21,16 @@ python train_sst.py \
     --sa_neu_num=768 \
     --pretrained_model=inception_v3_google.pth \
     --pretrained_model_dir=../pretrained_models \
-    --snapshot_dir=../snapshots/inceptionv3_spa_#13 \
-    --log_dir=../log/inceptionv3_spa_#13 \
+    --snapshot_dir=../snapshots/inceptionv3_sos+sa_v3_#1 \
+    --log_dir=../log/inceptionv3_sos+sa_v3_#1 \
     --epoch=100 \
     --decay_points=80 \
-    --decay_module=bb,cls \
-    --batch_size=128 \
+    --decay_module=bb,cls,sos,sa \
+    --batch_size=64 \
     --gpus=0,1,2,3 \
-    --lr=0.01 \
-    --cls_lr=0.1 \
-    --sos_lr=0.0005 \
+    --lr=0.005 \
+    --cls_lr=0.05 \
+    --sos_lr=0.00005 \
     --sa_lr=0.05 \
     --scg_com \
     --scg_blocks=4,5 \
@@ -45,5 +45,5 @@ python train_sst.py \
     --ram_th_bg=0.1 \
     --ram_bg_fg_gap=0 \
     --ram_start=20 \
-    --mode=spa \
+    --mode=sos+sa_v3 \
     --watch_cam \
