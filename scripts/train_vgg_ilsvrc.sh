@@ -31,12 +31,12 @@ python train_sst.py \
     --warmup_fun=gra \
     --decay_point=12,14 \
     --decay_module=bb,cls,sa\;bb,cls,sa \
-    --lr=0.01 \
-    --cls_lr=0.01 \
-    --sos_lr=0.0005 \
-    --sa_lr=0.01 \
+    --lr=0.008 \
+    --cls_lr=0.008 \
+    --sos_lr=0.0004 \
+    --sa_lr=0.008 \
     --spa_loss=True \
-    --spa_loss_weight=0.001 \
+    --spa_loss_weight=0.008 \
     --spa_loss_start=3 \
     --ram \
     --ra_loss_weight=0.5 \
