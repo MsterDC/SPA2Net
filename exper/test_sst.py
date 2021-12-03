@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 
 from engine.engine_loader import data_loader
-from engine.engine_test import opts, get_model, init_meters, eval_loc_all, print_fun, res_record, sc_format
+from engine.engine_test import opts, get_model, init_meters, eval_loc_all, print_fun, res_record, sc_format, get_and_save_scm, get_and_save_cam, get_and_save_sos
 from utils import evaluate
 
 
@@ -76,7 +76,7 @@ def val(args):
                 logits, sc_maps_fo_merge, sc_maps_so_merge = model(img_merge, train_flag=False)
             if args.mode == 'sos':
                 logits, pred_sos, sc_maps_fo_merge, sc_maps_so_merge = model(img_merge, train_flag=False)
-            if 'sos+sa' in args.mode:
+            if args.mode == 'sos+sa_v3':
                 logits, pred_sos, sc_maps_fo_merge, sc_maps_so_merge = model(img_merge, train_flag=False)
 
             # shape of logits: [220,200,14,14]
@@ -93,7 +93,7 @@ def val(args):
             if args.tencrop == 'True':
                 cls_logits = cls_logits.mean(1)  # 20 * 200
                 if 'sos' in args.mode:
-                    pred_sos = pred_sos.reshape(-1, ncrops + 1, c, h, w) if 'mc_sos' in args.mode else pred_sos.reshape(-1, ncrops + 1, h, w)
+                    pred_sos = pred_sos.reshape(-1, ncrops + 1, h, w)
                     pred_sos = pred_sos[:, -1, ...]
 
             # record acc for classification
@@ -106,6 +106,17 @@ def val(args):
             # normalize logits
             loc_map = F.relu(logits_loc)  # 20 * 200 * 14 * 14
 
+        # img_path :  <'../data/ILSVRC/img_val/ILSVRC2012_val_00000001.JPEG'>
+
+        # For saving mask metric
+        if args.mask_save == 'True':
+            top1_cams, gt_known_cams = get_and_save_cam(cls_logits, loc_map, img_path, label_in, args.mask_path)
+            get_and_save_scm(top1_cams, gt_known_cams, sc_maps_fo, sc_maps_so, img_path, args.batch_size, args.mask_path)
+            get_and_save_sos(pred_sos, img_path, args.batch_size, args.mask_path)
+        if args.mask_only == 'True':
+            continue
+
+
         params_loc = {'cls_logits': cls_logits, 'input_cls_img': img_cls, 'logits': logits,
                       'sc_maps_fo': sc_maps_fo, 'sc_maps_so': sc_maps_so, 'loc_map': loc_map,
                       'loc_err': loc_err, 'img_path': img_path, 'input_loc_img': img_loc,
@@ -114,6 +125,8 @@ def val(args):
             params_loc.update({'pred_sos': pred_sos})
 
         loc_err = eval_loc_all(args, params_loc)
+
+    print("Congratulation! Mission Success.")
 
     # print val messages and record
     print_params = {'loc_err': loc_err, 'top1_clsacc': top1_clsacc, 'top5_clsacc': top5_clsacc}
