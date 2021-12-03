@@ -50,3 +50,4 @@ python train_sst.py \
     --sa_neu_num=512 \
     --watch_cam \
     --mode=sos+sa_v3 \
+
