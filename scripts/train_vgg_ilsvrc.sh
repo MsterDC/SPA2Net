@@ -19,13 +19,13 @@ python train_sst.py \
     --sos_loss_method=BCE \
     --sa_use_edge=True \
     --sa_edge_stage=4,5 \
-    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_wp_#48 \
-    --log_dir=../log/ilsvrc/vgg16_sos+sa_v3_wp_#48 \
+    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_wp_#46 \
+    --log_dir=../log/ilsvrc/vgg16_sos+sa_v3_wp_#46 \
     --load_finetune=True \
     --pretrained_model=ilsvrc_epoch_20.pth.tar \
     --pretrained_model_dir=../snapshots/ilsvrc/vgg16_spa_#1 \
     --batch_size=64 \
-    --gpus=0,1,2,3 \
+    --gpus=0,1,2,3,4,5,6,7 \
     --epoch=20 \
     --warmup=True \
     --warmup_fun=gra \
@@ -33,8 +33,8 @@ python train_sst.py \
     --decay_module=bb,cls,sa\;bb,cls,sa \
     --lr=0.001 \
     --cls_lr=0.001 \
-    --sos_lr=0.0005 \
-    --sa_lr=0.001 \
+    --sos_lr=0.00005 \
+    --sa_lr=0.005 \
     --spa_loss=True \
     --spa_loss_weight=0.001 \
     --spa_loss_start=3 \
