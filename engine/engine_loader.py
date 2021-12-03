@@ -24,8 +24,10 @@ def data_loader(args, train=True):
     # training and test dataset & dataloader
     if train:
         img_train = DataSet(args, train_flag=train)
+#         train_loader = DataLoader(img_train, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+#                                   worker_init_fn=_init_fn)
         train_loader = DataLoader(img_train, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                                  worker_init_fn=_init_fn)
+                                  worker_init_fn=_init_fn, drop_last=True)
         return train_loader
     else:
         img_test = DataSet(args, train_flag=train)
