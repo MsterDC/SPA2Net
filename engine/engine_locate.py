@@ -1,11 +1,12 @@
 import numpy as np
 import cv2
 import torch
-from scipy.ndimage import label
 
+from scipy.ndimage import label
 from utils.vistools import norm_atten_map
 
-def get_topk_boxes_hier(args, cls_inds, cam_map, gt_label, crop_size, threshold, mode='union'):
+
+def get_topk_boxes_hier(cls_inds, cam_map, gt_label, crop_size, threshold, mode='union'):
     """
     @ author: Kevin
     :param cls_inds: list => [cls_idx_1, cls_idx_2, ... cls_idx_5]
@@ -23,13 +24,8 @@ def get_topk_boxes_hier(args, cls_inds, cam_map, gt_label, crop_size, threshold,
     maxk_maps = []
     for cls in cls_inds:
         cam_map_ = cam_map[cls, :, :]  # (14,14)
-
-        # using different norm function
-        # norm_fun = NormalizationFamily()
-        # cam_map_ = norm_fun(args.norm_fun, cam_map_, args.percentile)
         cam_map_ = norm_atten_map(cam_map_)  # (14,14)
 
-        # TODO(Kevin): crop_size correctly ?
         cam_map_cls = cv2.resize(cam_map_, dsize=(crop_size, crop_size))
 
         maxk_maps.append(cam_map_.copy())
@@ -63,12 +59,8 @@ def get_topk_boxes_hier(args, cls_inds, cam_map, gt_label, crop_size, threshold,
     gt_known_maps = []
     cam_map_ = cam_map[int(gt_label), :, :]
 
-    # using different norm function
-    # norm_fun = NormalizationFamily()
-    # cam_map_ = norm_fun(args.norm_fun, cam_map_, args.percentile)
     cam_map_ = norm_atten_map(cam_map_)
 
-    # TODO(Kevin): crop_size correctly？
     cam_map_gt_known = cv2.resize(cam_map_, dsize=(crop_size, crop_size))
 
     gt_known_maps.append(cam_map_gt_known.copy())

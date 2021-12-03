@@ -14,6 +14,7 @@ from torch import optim
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
 from utils.meters import AverageMeter
+import engine.engine_optim as my_optim
 from engine.engine_scheduler import GradualWarmupScheduler
 from models import *
 
@@ -89,8 +90,8 @@ class opts(object):
         self.parser.add_argument("--sos_gt_seg", type=str, default='True', help='True / False')
         self.parser.add_argument("--sos_seg_method", type=str, default='BC', help='BC / TC')
         self.parser.add_argument("--sos_loss_method", type=str, default='BCE', help='BCE / MSE')
-        self.parser.add_argument("--sos_fg_th", type=float, default=0.01, help='segment pseudo gt scm')
-        self.parser.add_argument("--sos_bg_th", type=float, default=0.01, help='segment pseudo gt scm')
+        self.parser.add_argument("--sos_fg_th", type=float, default=0.01, help='threshold for segment pseudo gt scm')
+        self.parser.add_argument("--sos_bg_th", type=float, default=0.01, help='threshold for segment pseudo gt scm')
         self.parser.add_argument("--sos_loss_weight", type=float, default=0.1, help='loss weight for the sos loss.')
         self.parser.add_argument("--sos_start", type=float, default=10, help='the start epoch to introduce sos.')
 
@@ -113,6 +114,10 @@ class opts(object):
         opt.gpus_str = opt.gpus
         opt.gpus = list(map(int, opt.gpus.split(',')))
         opt.gpus = [i for i in range(len(opt.gpus))] if opt.gpus[0] >= 0 else [-1]
+        # eval the training mode
+        mode = ['spa','sos','spa+sa','sos+sa_v3']
+        if opt.mode not in mode:
+            raise Exception('[Error] Invalid training mode, please check.')
         return opt
 
 
@@ -127,9 +132,9 @@ def get_model(args):
     lr = args.lr
     cls_lr = args.cls_lr
     sos_lr = args.sos_lr if ('sos' in args.mode) else None
-    sa_lr = args.sa_lr if 'sa' in args.mode else None
+    sa_lr = args.sa_lr if ('sa' in args.mode) else None
 
-    cls_layer = ['cls'] if 'vgg' in args.arch else ['cls_fc']  # vgg or inceptionv3
+    cls_layer = ['cls']
     cls_weight_list = []
     cls_bias_list = []
     other_weight_list = []
@@ -139,10 +144,7 @@ def get_model(args):
     sos_weight_list = []
     sos_bias_list = []
 
-    if 'sa' in args.mode:
-        sa_layer = ['sa'] if 'vgg' in args.arch else ['sdpa']
-    else:
-        sa_layer = []
+    sa_layer = ['sa'] if ('sa' in args.mode) else []
     sa_weight_list = []
     sa_bias_list = []
 
@@ -243,11 +245,12 @@ def reproducibility_set(args):
 def log_init(args):
     batch_time = AverageMeter()
     losses = AverageMeter()
+    cls_loss = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
-    return_params = [batch_time, losses, top1, top5]
+    return_params = [batch_time, losses, cls_loss, top1, top5]
 
-    log_head = '#epoch \t loss \t pred@1 \t pred@5 \t'
+    log_head = '#epoch \t loss \t cls_loss \t pred@1 \t pred@5 \t'
 
     losses_so = None
     losses_ra = None
@@ -281,8 +284,11 @@ def warmup_init(args, optimizer, op_params_list):
             cos_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=4, T_mult=1)
         return cos_scheduler
 
-    # set warm-up module
+    # set gra warm-up module
     if args.warmup_fun == 'gra':
+
+        wp_period, wp_node, wp_ps = None, None, None
+
         if args.dataset == 'ilsvrc':
             aba_params = []
             aba_list = args.aba_params.strip().split(',')
@@ -320,3 +326,56 @@ def warmup_init(args, optimizer, op_params_list):
 
         return gra_scheduler
 
+
+def warmup_adjust(args, decay_params, decay_count, decay_flag, decay_once,
+                  increase_once, increase_params, increase_count, optimizer,
+                  current_epoch, gra_scheduler):
+    return_list = []
+    if args.warmup == 'True':  # warmup LR
+        if args.dataset == 'cub':
+            raise Exception("On cub-200, warmup lr is unused.")
+        if args.dataset == 'ilsvrc':
+            decay_str = decay_params[decay_count]
+            if my_optim.reduce_lr(args, optimizer, current_epoch, decay_params=decay_str):
+                decay_count += 1
+                if args.warmup_fun == 'gra':
+                    gra_scheduler.update_optimizer(optimizer, current_epoch)
+            if args.warmup_fun == 'gra':
+                gra_scheduler.step(current_epoch)
+    else:  # w/o warmup
+        if args.dataset == 'cub':
+            if args.decay_points == 'none':
+                if decay_flag is True and decay_once is False:
+                    decay_str = decay_params[decay_count]
+                    if my_optim.reduce_lr(args, optimizer, current_epoch, decay_params=decay_str):
+                        total_epoch = current_epoch + 20
+                        decay_once = True
+                        decay_count += 1
+                        return_list.append(total_epoch)
+            else:
+                decay_str = decay_params[decay_count]
+                if my_optim.reduce_lr(args, optimizer, current_epoch, decay_params=decay_str):
+                    decay_once = True
+                    decay_count += 1
+        if args.dataset == 'ilsvrc':
+            decay_str = decay_params[decay_count]
+            if my_optim.reduce_lr(args, optimizer, current_epoch, decay_params=decay_str):
+                decay_once = True
+                decay_count += 1
+
+    # Increasing learning rate only once.
+    if args.increase_lr == 'True' and args.dataset == 'ilsvrc':
+        if decay_once is True and increase_once is False:
+            increase_str = increase_params[increase_count]
+            if my_optim.increase_lr(args, optimizer, current_epoch, increase_params=increase_str):
+                decay_once = False
+                increase_once = True
+                increase_count += 1
+
+    return_list.append(optimizer)
+    return_list.append(decay_count)
+    return_list.append(decay_once)
+    return_list.append(gra_scheduler)
+    return_list.append(increase_once)
+    return_list.append(increase_count)
+    return return_list
