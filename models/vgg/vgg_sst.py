@@ -48,7 +48,7 @@ class VGG(nn.Module):
             self.sa = ScaledDotProductAttention(d_model=int(args.sa_neu_num), d_k=int(args.sa_neu_num),
                                                 d_v=int(args.sa_neu_num), h=int(args.sa_head), weight=args.sa_edge_weight)
 
-        if 'sos' in self.args.mode and 'mc' not in self.args.mode:
+        if 'sos' in self.args.mode:
             self.sos = nn.Sequential(
                 nn.Conv2d(512, 1024, kernel_size=3, padding=1, dilation=1),
                 nn.ReLU(True),
@@ -175,7 +175,7 @@ class VGG(nn.Module):
         spa_loss = torch.mean(torch.sum(torch.sum(post_map, dim=1), dim=1) / (h*w) * 1.0)
         return spa_loss * self.args.spa_loss_weight
 
-    def get_sos_loss(self, pre_hm, gt_hm, label):
+    def get_sos_loss(self, pre_hm, gt_hm):
         if self.args.sos_gt_seg == 'False' or self.args.sos_loss_method == 'MSE':
             return self.mse_loss(pre_hm, gt_hm)
         if self.args.sos_seg_method == 'TC':
@@ -214,9 +214,10 @@ class VGG(nn.Module):
                                                             loss_params.get('pred_sos'), loss_params.get('gt_sos')
         cls_logits = torch.mean(torch.mean(logits, dim=2), dim=2)
         # get cls loss
-        loss = loss + self.get_cls_loss(cls_logits, label)
+        cls_loss = self.get_cls_loss(cls_logits, label)
+        loss = loss + cls_loss
         if 'sos' in self.args.mode and epoch >= self.args.sos_start:
-            sos_loss = self.get_sos_loss(pred_sos, gt_sos, label)
+            sos_loss = self.get_sos_loss(pred_sos, gt_sos)
             loss += self.args.sos_loss_weight * sos_loss
         else:
             sos_loss = torch.zeros_like(loss)
@@ -225,7 +226,7 @@ class VGG(nn.Module):
             loss += self.args.ra_loss_weight * ra_loss
         else:
             ra_loss = torch.zeros_like(loss)
-        return loss, ra_loss, sos_loss
+        return loss, cls_loss, ra_loss, sos_loss
 
     def cal_sc(self, feat):
         F1_2, F3, F4, F5 = feat
@@ -329,23 +330,16 @@ class VGG(nn.Module):
                     sos_in = self.sa(sa_in, sa_in, sa_in, edge_code)
                 else:
                     sos_in = f5
-                if 'mc_sos' in self.args.mode:
-                    sos_map = self.mc_sos(sos_in)
-                else:
-                    sos_map = self.sos(sos_in)
-                    sos_map = sos_map.squeeze()
+                sos_map = self.sos(sos_in)
+                sos_map = sos_map.squeeze()
         else:  # test
             edge_code = None
             if self.args.sa_use_edge == 'True':
                 edge_code = self.cal_edge((f4, f5))
             sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
             sos_in = self.sa(sa_in, sa_in, sa_in, edge_code)
-            if 'mc_sos' in self.args.mode:
-                sos_map = self.mc_sos(sos_in)
-                sos_map = sos_map.squeeze()
-            else:
-                sos_map = self.sos(sos_in)
-                sos_map = sos_map.squeeze()
+            sos_map = self.sos(sos_in)
+            sos_map = sos_map.squeeze()
         return cls_map, sos_map, sc_fo, sc_so
 
     def _forward_sos_sa_v3(self, train_flag, current_epoch, feat):
@@ -365,19 +359,13 @@ class VGG(nn.Module):
                 sa_out = self.sa(sa_in, sa_in, sa_in, edge_code)
                 cls_map = self.cls(sa_out)
                 if self.args.sos_start <= current_epoch:
-                    if 'mc_sos' in self.args.mode:
-                        sos_map = self.mc_sos(sa_out)
-                    else:
-                        sos_map = self.sos(sa_out)
-                        sos_map = sos_map.squeeze()
+                    sos_map = self.sos(sa_out)
+                    sos_map = sos_map.squeeze()
             else:
                 cls_map = self.cls(f5)
                 if self.args.sos_start <= current_epoch:
-                    if 'mc_sos' in self.args.mode:
-                        sos_map = self.mc_sos(f5)
-                    else:
-                        sos_map = self.sos(f5)
-                        sos_map = sos_map.squeeze()
+                    sos_map = self.sos(f5)
+                    sos_map = sos_map.squeeze()
         else:  # test
             edge_code = None
             if self.args.sa_use_edge == 'True':
@@ -385,12 +373,8 @@ class VGG(nn.Module):
             sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
             sa_out = self.sa(sa_in, sa_in, sa_in, edge_code)
             cls_map = self.cls(sa_out)
-            if 'mc_sos' in self.args.mode:
-                sos_map = self.mc_sos(sa_out)
-                sos_map = sos_map.squeeze()
-            else:
-                sos_map = self.sos(sa_out)
-                sos_map = sos_map.squeeze()
+            sos_map = self.sos(sa_out)
+            sos_map = sos_map.squeeze()
         return cls_map, sos_map, sc_fo, sc_so
 
     def _forward_sos(self, train_flag, current_epoch, feat):
