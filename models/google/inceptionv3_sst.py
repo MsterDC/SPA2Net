@@ -17,14 +17,50 @@ model_urls = {
 }
 
 
+def model(pretrained=False, **kwargs):
+    r"""Inception v3 model architecture from
+    `"Rethinking the Inception Architecture for Computer Vision" <http://arxiv.org/abs/1512.00567>`_.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    if pretrained:
+        model = Inception3(**kwargs)
+        model_dict = model.state_dict()
+        pretrained_file = os.path.join(kwargs['args'].pretrained_model_dir, kwargs['args'].pretrained_model)
+        if os.path.isfile(pretrained_file):
+            pretrained_dict = torch.load(pretrained_file)
+            print('load pretrained model from {}'.format(pretrained_file))
+        else:
+            pretrained_dict = model_zoo.load_url(model_urls['inception_v3_google'])
+            print('load pretrained model from: {}'.format(model_urls['inception_v3_google']))
+        for k in pretrained_dict.keys():
+            # print('Pretrained Key {}:'.format(k))
+            if k not in model_dict:
+                print('Key {} is removed from inception v3'.format(k))
+        for k in model_dict.keys():
+            # print('SPA-Net Key {}:'.format(k))
+            if k not in pretrained_dict:
+                print('Key {} is new added for SPA-Net'.format(k))
+        # 1. filter out unnecessary keys
+        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+        # 2. overwrite entries in the existing state dict
+        model_dict.update(pretrained_dict)
+        # 3. load the new state dict
+        model.load_state_dict(model_dict)
+
+        return model
+
+    return Inception3(**kwargs)
+
+
 class Inception3(nn.Module):
 
     def __init__(self, num_classes=1000, args=None):
         super(Inception3, self).__init__()
-        # ====================== network settings ==============================
-        self.num_classes = num_classes
         self.args = args
-        # ====================== backbone ==============================
+        self.num_classes = num_classes
+
         self.Conv2d_1a_3x3 = BasicConv2d(3, 32, kernel_size=3, stride=2, padding=1)
         self.Conv2d_2a_3x3 = BasicConv2d(32, 32, kernel_size=3,stride=1, padding=0)
         self.Conv2d_2b_3x3 = BasicConv2d(32, 64, kernel_size=3, stride=1, padding=1)
@@ -39,23 +75,18 @@ class Inception3(nn.Module):
         self.Mixed_6d = InceptionC(768, channels_7x7=160)
         self.Mixed_6e = InceptionC(768, channels_7x7=192)
 
-        self.num_classes = args.num_classes
-
-        self.cls_fc6 = nn.Sequential(
-            nn.Conv2d(768, 1024, kernel_size=3, padding=1, dilation=1),   #fc6
+        self.cls = nn.Sequential(
+            nn.Conv2d(768, 1024, kernel_size=3, padding=1, dilation=1),  # fc6
             nn.ReLU(True),
-        )
-        self.cls_fc7 = nn.Sequential(
-            nn.Conv2d(1024, 1024, kernel_size=3, padding=1, dilation=1),   #fc6
-            nn.ReLU(True))
-
-        self.cls_fc8 = nn.Conv2d(1024, num_classes, kernel_size=1, padding=0)  #fc8
+            nn.Conv2d(1024, 1024, kernel_size=3, padding=1, dilation=1),  # fc7
+            nn.ReLU(True),
+            nn.Conv2d(1024, self.num_classes, kernel_size=1, padding=0))
 
         if 'sa' in self.args.mode:
-            self.sdpa = ScaledDotProductAttention(d_model=int(args.sa_neu_num), d_k=int(args.sa_neu_num),
+            self.sa = ScaledDotProductAttention(d_model=int(args.sa_neu_num), d_k=int(args.sa_neu_num),
                                                 d_v=int(args.sa_neu_num), h=int(args.sa_head), weight=args.sa_edge_weight)
 
-        if 'sos' in self.args.mode and 'mc' not in self.args.mode:
+        if 'sos' in self.args.mode:
             self.sos = nn.Sequential(
                 nn.Conv2d(768, 1024, kernel_size=3, padding=1, dilation=1),
                 nn.ReLU(True),
@@ -64,7 +95,8 @@ class Inception3(nn.Module):
                 nn.Conv2d(1024, 1, kernel_size=1, padding=0))
 
         self._initialize_weights()
-        # ================================ loss ===================================
+
+        # loss function
         self.ce_loss = F.cross_entropy
         self.mse_loss = F.mse_loss
         self.bce_loss = F.binary_cross_entropy_with_logits  # with sigmoid function
@@ -141,6 +173,29 @@ class Inception3(nn.Module):
         gt_scm = gt_scm.detach()
         return gt_scm
 
+    def hsc(self, f_phi, fo_th=0.2, so_th=1, order=2):
+        n, c_nl, h, w = f_phi.size()
+        f_phi = f_phi.permute(0, 2, 3, 1).contiguous().view(n, -1, c_nl)
+        f_phi_normed = f_phi / (torch.norm(f_phi, dim=2, keepdim=True) + 1e-10)
+
+        # first order
+        non_local_cos = F.relu(torch.matmul(f_phi_normed, f_phi_normed.transpose(1, 2)))
+        non_local_cos[non_local_cos < fo_th] = 0
+        non_local_cos_fo = non_local_cos.clone()
+        non_local_cos_fo = non_local_cos_fo / (torch.sum(non_local_cos_fo, dim=1, keepdim=True) + 1e-5)
+
+        # high order
+        base_th = 1. / (h * w)
+        non_local_cos[:, torch.arange(h * w), torch.arange(w * h)] = 0  # 对角线清零
+        non_local_cos = non_local_cos / (torch.sum(non_local_cos, dim=1, keepdim=True) + 1e-5)
+        non_local_cos_ho = non_local_cos.clone()
+        so_th = base_th * so_th
+        for _ in range(order - 1):
+            non_local_cos_ho = torch.matmul(non_local_cos_ho, non_local_cos)
+            non_local_cos_ho = non_local_cos_ho / (torch.sum(non_local_cos_ho, dim=1, keepdim=True) + 1e-10)
+        non_local_cos_ho[non_local_cos_ho < so_th] = 0
+        return non_local_cos_fo, non_local_cos_ho
+
     def normalize_feat(self, feat):
         n, fh, fw = feat.size()
         feat = feat.view(n, -1)
@@ -153,10 +208,10 @@ class Inception3(nn.Module):
     def get_sparse_loss(self, act_map):
         n, h, w = act_map.shape
         post_map = torch.where(act_map >= 0, act_map, torch.zeros_like(act_map))
-        spa_loss = torch.mean(torch.sum(torch.sum(post_map, dim=1), dim=1) / (h*w) * 1.0)
+        spa_loss = torch.mean(torch.sum(torch.sum(post_map, dim=1), dim=1) / (h * w) * 1.0)
         return spa_loss * self.args.spa_loss_weight
 
-    def get_sos_loss(self, pre_hm, gt_hm, label):
+    def get_sos_loss(self, pre_hm, gt_hm):
         if self.args.sos_gt_seg == 'False' or self.args.sos_loss_method == 'MSE':
             return self.mse_loss(pre_hm, gt_hm)
         if self.args.sos_seg_method == 'TC':
@@ -196,9 +251,10 @@ class Inception3(nn.Module):
                                                             loss_params.get('pred_sos'), loss_params.get('gt_sos')
         cls_logits = torch.mean(torch.mean(logits, dim=2), dim=2)
         # get cls loss
-        loss = loss + self.get_cls_loss(cls_logits, label)
+        cls_loss = self.get_cls_loss(cls_logits, label)
+        loss = loss + cls_loss
         if 'sos' in self.args.mode and epoch >= self.args.sos_start:
-            sos_loss = self.get_sos_loss(pred_sos, gt_sos, label)
+            sos_loss = self.get_sos_loss(pred_sos, gt_sos)
             loss += self.args.sos_loss_weight * sos_loss
         else:
             sos_loss = torch.zeros_like(loss)
@@ -207,7 +263,7 @@ class Inception3(nn.Module):
             loss += self.args.ra_loss_weight * ra_loss
         else:
             ra_loss = torch.zeros_like(loss)
-        return loss, ra_loss, sos_loss
+        return loss, cls_loss, ra_loss, sos_loss
 
     def cal_sc(self, feat):
         F1_2, F3, F4, F5 = feat
@@ -254,7 +310,7 @@ class Inception3(nn.Module):
     def _forward_spa(self, train_flag, feat):
         f12, f3, f4, f5 = feat
         sc_fo, sc_so = None, None
-        cls_map = self.inference(f5)
+        cls_map = self.cls(f5)
         if not train_flag:
             sc_fo, sc_so = self.cal_sc(feat)
         return cls_map, sc_fo, sc_so
@@ -269,7 +325,7 @@ class Inception3(nn.Module):
                 ho_self_corr = None
                 if self.args.sa_use_edge == 'True':
                     ho_self_corr = self.cal_edge((f4, f5))
-                cls_in = self.sdpa(sa_in, sa_in, sa_in, ho_self_corr)
+                cls_in = self.sa(sa_in, sa_in, sa_in, ho_self_corr)
             else:
                 cls_in = f5
         else:
@@ -278,13 +334,13 @@ class Inception3(nn.Module):
             edge_code = None
             if self.args.sa_use_edge == 'True':
                 edge_code = self.cal_edge((f4, f5))
-            cls_in = self.sdpa(sa_in, sa_in, sa_in, edge_code)
-        cls_map = self.inference(cls_in)
+            cls_in = self.sa(sa_in, sa_in, sa_in, edge_code)
+        cls_map = self.cls(cls_in)
         return cls_map, sc_fo, sc_so
 
     def _forward_sos(self, train_flag, current_epoch, feat):
         f12, f3, f4, f5 = feat
-        cls_map = self.inference(f5)
+        cls_map = self.cls(f5)
         sc_fo, sc_so, sos_map = None, None, None
         if train_flag:  # train
             if self.args.sos_start <= current_epoch:
@@ -298,9 +354,6 @@ class Inception3(nn.Module):
         return cls_map, sos_map, sc_fo, sc_so
 
     def _forward_sos_sa_v3(self, train_flag, current_epoch, feat):
-        """
-        sa module at main branch.
-        """
         sc_fo, sc_so = self.cal_sc(feat)
         f12, f3, f4, f5 = feat
         sos_map = None
@@ -311,35 +364,25 @@ class Inception3(nn.Module):
                 if self.args.sa_use_edge == 'True':
                     edge_code = self.cal_edge((f4, f5))
                 sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
-                sa_out = self.sdpa(sa_in, sa_in, sa_in, edge_code)
-                cls_map = self.inference(sa_out)
+                sa_out = self.sa(sa_in, sa_in, sa_in, edge_code)
+                cls_map = self.cls(sa_out)
                 if self.args.sos_start <= current_epoch:
-                    if 'mc_sos' in self.args.mode:
-                        sos_map = self.mc_sos(sa_out)
-                    else:
-                        sos_map = self.sos(sa_out)
-                        sos_map = sos_map.squeeze()
+                    sos_map = self.sos(sa_out)
+                    sos_map = sos_map.squeeze()
             else:
-                cls_map = self.inference(f5)
+                cls_map = self.cls(f5)
                 if self.args.sos_start <= current_epoch:
-                    if 'mc_sos' in self.args.mode:
-                        sos_map = self.mc_sos(f5)
-                    else:
-                        sos_map = self.sos(f5)
-                        sos_map = sos_map.squeeze()
+                    sos_map = self.sos(f5)
+                    sos_map = sos_map.squeeze()
         else:  # test
             edge_code = None
             if self.args.sa_use_edge == 'True':
                 edge_code = self.cal_edge((f4, f5))
             sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
-            sa_out = self.sdpa(sa_in, sa_in, sa_in, edge_code)
-            cls_map = self.inference(sa_out)
-            if 'mc_sos' in self.args.mode:
-                sos_map = self.mc_sos(sa_out)
-                sos_map = sos_map.squeeze()
-            else:
-                sos_map = self.sos(sa_out)
-                sos_map = sos_map.squeeze()
+            sa_out = self.sa(sa_in, sa_in, sa_in, edge_code)
+            cls_map = self.cls(sa_out)
+            sos_map = self.sos(sa_out)
+            sos_map = sos_map.squeeze()
         return cls_map, sos_map, sc_fo, sc_so
 
     def forward(self, x, train_flag=True, cur_epoch=500):
@@ -367,62 +410,9 @@ class Inception3(nn.Module):
             return self._forward_spa_sa(train_flag, cur_epoch, ft_1_5)
         if self.args.mode == 'sos':
             return self._forward_sos(train_flag, cur_epoch, ft_1_5)
-        if 'sos+sa_v3' in self.args.mode:
+        if self.args.mode == 'sos+sa_v3':
             return self._forward_sos_sa_v3(train_flag, cur_epoch, ft_1_5)
         raise Exception("[Error] Invalid training mode: ", self.args.mode)
-
-    def inference(self, x):
-        x = self.cls_fc6(x)
-        x = self.cls_fc7(x)
-        out1 = self.cls_fc8(x)
-        return out1
-
-    # def hsc(self, f_phi, fo_th=0.1, so_th=0.1, order=2):
-    #     n, c_nl, h, w = f_phi.size()
-    #     f_phi = f_phi.permute(0, 2, 3, 1).contiguous().view(n, -1, c_nl)
-    #     f_phi_normed = f_phi / (torch.norm(f_phi, dim=2, keepdim=True) + 1e-10)
-    #
-    #     # first order
-    #     non_local_cos = F.relu(torch.matmul(f_phi_normed, f_phi_normed.transpose(1, 2)))
-    #     non_local_cos[non_local_cos < fo_th] = 0
-    #     non_local_cos_fo = non_local_cos.clone()
-    #
-    #     # high order
-    #     non_local_cos[:, torch.arange(h * w), torch.arange(w * h)] = 0
-    #     non_local_cos_ho = non_local_cos.clone()
-    #     for _ in range(order - 1):
-    #         non_local_cos_ho[:, torch.arange(h * w), torch.arange(w * h)] = 0
-    #         non_local_cos_ho = torch.matmul(non_local_cos_ho, non_local_cos)
-    #     non_local_cos_ho = non_local_cos_ho - torch.min(non_local_cos_ho, dim=1, keepdim=True)[0]
-    #     non_local_cos_ho = non_local_cos_ho / (torch.max(non_local_cos_ho, dim=1, keepdim=True)[0] + 1e-10)
-    #     non_local_cos_ho[non_local_cos_ho < so_th] = 0
-    #     return non_local_cos_fo, non_local_cos_ho
-
-    def hsc(self, f_phi, fo_th=0.2, so_th=1, order=2):
-        n, c_nl, h, w = f_phi.size()
-        f_phi = f_phi.permute(0, 2, 3, 1).contiguous().view(n, -1, c_nl)
-        f_phi_normed = f_phi / (torch.norm(f_phi, dim=2, keepdim=True) + 1e-10)
-
-        # first order
-        non_local_cos = F.relu(torch.matmul(f_phi_normed, f_phi_normed.transpose(1, 2)))
-        non_local_cos[non_local_cos < fo_th] = 0
-        non_local_cos_fo = non_local_cos.clone()
-        non_local_cos_fo = non_local_cos_fo / (torch.sum(non_local_cos_fo, dim=1, keepdim=True) + 1e-5)
-
-        # high order
-        base_th = 1. / (h * w)
-        non_local_cos[:, torch.arange(h * w), torch.arange(w * h)] = 0  # 对角线清零
-        non_local_cos = non_local_cos / (torch.sum(non_local_cos, dim=1, keepdim=True) + 1e-5)
-        non_local_cos_ho = non_local_cos.clone()
-        so_th = base_th * so_th
-        for _ in range(order - 1):
-            non_local_cos_ho = torch.matmul(non_local_cos_ho, non_local_cos)
-            non_local_cos_ho = non_local_cos_ho / (torch.sum(non_local_cos_ho, dim=1, keepdim=True) + 1e-10)
-        non_local_cos_ho[non_local_cos_ho < so_th] = 0
-        return non_local_cos_fo, non_local_cos_ho
-
-    def get_cam_maps(self):
-        return self.cam_map
 
 
 class InceptionA(nn.Module):
@@ -530,8 +520,6 @@ class BasicConv2d(nn.Module):
         return F.relu(x, inplace=True)
 
 
-
-
 class InceptionD(nn.Module):
 
     def __init__(self, in_channels):
@@ -623,42 +611,4 @@ class InceptionAux(nn.Module):
         x = self.fc(x)
         # 1000
         return x
-
-def model(pretrained=False, **kwargs):
-    r"""Inception v3 model architecture from
-    `"Rethinking the Inception Architecture for Computer Vision" <http://arxiv.org/abs/1512.00567>`_.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-    """
-    if pretrained:
-        # if 'transform_input' not in kwargs:
-        #     kwargs['transform_input'] = True
-        model = Inception3(**kwargs)
-        model_dict = model.state_dict()
-        pretrained_file = os.path.join(kwargs['args'].pretrained_model_dir, kwargs['args'].pretrained_model)
-        if os.path.isfile(pretrained_file):
-            pretrained_dict = torch.load(pretrained_file)
-            print('load pretrained model from {}'.format(pretrained_file))
-        else:
-            pretrained_dict = model_zoo.load_url(model_urls['inception_v3_google'])
-            print('load pretrained model from: {}'.format(model_urls['inception_v3_google']))
-        for k in pretrained_dict.keys():
-            # print('Pretrained Key {}:'.format(k))
-            if k not in model_dict:
-                print('Key {} is removed from inception v3'.format(k))
-        for k in model_dict.keys():
-            # print('SPA-Net Key {}:'.format(k))
-            if k not in pretrained_dict:
-                print('Key {} is new added for SPA-Net'.format(k))
-        # 1. filter out unnecessary keys
-        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
-        # 2. overwrite entries in the existing state dict
-        model_dict.update(pretrained_dict)
-        # 3. load the new state dict
-        model.load_state_dict(model_dict)
-
-        return model
-
-    return Inception3(**kwargs)
 
