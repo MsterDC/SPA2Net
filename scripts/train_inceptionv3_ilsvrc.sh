@@ -47,6 +47,7 @@ python train_sst.py \
     --sos_start=0 \
     --sa_start=5 \
     --sa_head=8 \
-    --sa_neu_num=512 \
+    --sa_neu_num=768 \
     --watch_cam \
     --mode=sos+sa_v3 \
+
