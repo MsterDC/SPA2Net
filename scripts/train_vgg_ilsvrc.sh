@@ -24,10 +24,10 @@ python train_sst.py \
     --pretrained_model_dir=../snapshots/ilsvrc/vgg16_spa_#1 \
     --batch_size=64 \
     --gpus=0,1,2,3,4,5,6,7 \
-    --epoch=20 \
+    --epoch=30 \
     --warmup=True \
     --warmup_fun=gra \
-    --decay_point=12,14 \
+    --decay_point=20,25 \
     --decay_module=bb,cls,sa\;bb,cls,sa \
     --lr=0.001 \
     --cls_lr=0.001 \
@@ -43,8 +43,8 @@ python train_sst.py \
     --spa_loss_start=3 \
     --scg_fosc_th=0.2 \
     --scg_sosc_th=1 \
-    --sos_fg_th=0.4 \
-    --sos_bg_th=0.3 \
+    --sos_fg_th=0.2 \
+    --sos_bg_th=0.1 \
     --sos_loss_weight=1 \
     --sos_start=0 \
     --sa_start=3 \
