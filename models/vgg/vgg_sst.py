@@ -436,7 +436,7 @@ class VGG(nn.Module):
             return self._forward_spa_sa(train_flag, cur_epoch, ft_1_5)
         if self.args.mode == 'sos':
             return self._forward_sos(train_flag, cur_epoch, ft_1_5)
-        if 'sos+sa_v3' in self.args.mode:
+        if self.args.mode == 'sos+sa_v3':
             return self._forward_sos_sa_v3(train_flag, cur_epoch, ft_1_5)
         raise Exception("[Error] Invalid training mode: ", self.args.mode)
 
