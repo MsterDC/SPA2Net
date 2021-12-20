@@ -15,17 +15,17 @@ python test_sst.py \
     --sos_loss_method=BCE \
     --sa_use_edge=True \
     --sa_edge_stage=4,5 \
-    --snapshot_dir=../snapshots/vgg16_cls_#1 \
-    --debug_dir=../debug/vgg16_cls_#1_test1 \
-    --batch_size=18 \
+    --snapshot_dir=../snapshots/vgg16_sos+sa_v3_#8 \
+    --debug_dir=../debug/vgg16_sos+sa_v3_#8_test \
+    --batch_size=12 \
     --restore_from=cub_epoch_100.pth.tar \
-    --threshold=0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5 \
+    --threshold=0.1,0.1 \
     --scg_fosc_th=0.2 \
     --scg_sosc_th=1 \
-    --gpus=0 \
+    --gpus=3 \
     --sa_head=8 \
     --sa_neu_num=512 \
-    --mode=spa \
-    --debug \
-    --debug_num=100 \
-    --debug_only \
+    --mode=sos+sa_v3 \
+#    --debug \
+#    --debug_num=10 \
+#    --debug_only \

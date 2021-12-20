@@ -26,22 +26,19 @@ python train_sst.py \
     --sa_start=20 \
     --sa_head=8 \
     --sa_neu_num=512 \
-    --snapshot_dir=../snapshots/vgg16_cls_#1 \
-    --log_dir=../log/vgg16_cls_#1 \
+    --snapshot_dir=../snapshots/vgg16_sos+sa_v3_large_batch_#1 \
+    --log_dir=../log/vgg16_sos+sa_v3_large_batch_#1 \
     --epoch=100 \
     --decay_points=80 \
-    --decay_module=bb,cls \
+    --decay_module=all \
     --batch_size=64 \
-    --gpus=0,1 \
+    --gpus=0 \
     --lr=0.001 \
     --cls_lr=0.01 \
     --sos_lr=0.00005 \
     --sa_lr=0.005 \
-    --spa_loss=False \
-    --spa_loss_weight=0.0001 \
-    --spa_loss_start=20 \
     --sos_loss_weight=0.5 \
     --ra_loss_weight=1 \
-    --mode=spa \
-#    --watch_cam \
-#    --ram \
+    --mode=sos+sa_v3 \
+    --watch_cam \
+    --ram \

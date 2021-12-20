@@ -17,14 +17,16 @@ python test_sst.py \
     --sa_neu_num=768 \
     --scg_com \
     --scg_blocks=4,5 \
-    --snapshot_dir=../snapshots/inceptionv3_spa_#18 \
-    --debug_dir=../debug/inceptionv3_spa_#18_t1 \
-    --batch_size=15 \
+    --snapshot_dir=../snapshots/inceptionv3_sos_#8 \
+    --debug_dir=../debug/inceptionv3_sos_#8_t1 \
+    --batch_size=10 \
     --restore_from=cub_epoch_100.pth.tar \
-    --threshold=0.05,0.3 \
+    --threshold=0.05,0.5 \
     --scg_version=v2 \
     --scg_fosc_th=0.2 \
-    --scg_sosc_th=0.5 \
+    --scg_sosc_th=1 \
     --gpus=0 \
-    --mode=spa \
-#    --debug \
+    --mode=sos \
+    --debug \
+    --debug_num=10 \
+#    --debug_only \

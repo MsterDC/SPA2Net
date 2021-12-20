@@ -11,14 +11,14 @@ python test_sst.py \
     --num_classes=1000 \
     --scg_com \
     --scg_blocks=4,5 \
-    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_wp_#37 \
-    --debug_dir=../debug/ilsvrc/vgg16_sos+sa_v3_wp_#37_t1 \
-    --batch_size=20 \
+    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_#47 \
+    --debug_dir=../debug/ilsvrc/vgg16_sos+sa_v3_#47_t1 \
+    --batch_size=15 \
     --restore_from=ilsvrc_epoch_20.pth.tar \
     --scg_fosc_th=0.2 \
     --scg_sosc_th=1 \
     --gpus=0 \
-    --threshold=0.1,0.9 \
+    --threshold=0.1,0.8 \
     --sos_seg_method=TC \
     --sos_loss_method=BCE \
     --sa_use_edge=True \
