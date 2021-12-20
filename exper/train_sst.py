@@ -123,6 +123,9 @@ def train(args):
                 fw.write(out_str)
 
         save_flag = True  # 'save_cam' during training.
+        watch_trans_img, watch_cam, watch_cls_logits, watch_img_path, \
+        watch_label, watch_sos, watch_gt = [None] * 7
+
         for idx, dat in enumerate(train_loader):
             # len(train_loader) = how many batchs in train_loader
             global_counter += 1
@@ -278,24 +281,25 @@ def train(args):
 
         # save training record
         with open(os.path.join(args.snapshot_dir, 'train_record.csv'), 'a') as fw:
-            log_output = '{} \t {:.4f} \t {:.3f} \t {:.3f} \t'.format(current_epoch, losses.avg, losses_cls.avg, top1.avg, top5.avg)
+            log_output = '{} \t {:.4f} \t {:.3f} \t {:.3f} \t {:.3f} \t'.format(current_epoch, losses.avg, losses_cls.avg, top1.avg, top5.avg)
             writer.add_scalar('loss_epoch', losses.avg, current_epoch)
             writer.add_scalar('cls_loss_epoch', losses_cls.avg, current_epoch)
-            if 'sos' in args.mode:
-                log_output += '{:.4f} \t'.format(losses_so.avg)
-                writer.add_scalar('sos_loss', losses_so.avg, current_epoch)
-            if args.ram:
-                log_output += '{:.4f}'.format(losses_ra.avg)
-                writer.add_scalar('ram_loss', losses_ra.avg, current_epoch)
 
+            if args.ram:
+                log_output += '{:.4f} \t'.format(losses_ra.avg)
+                writer.add_scalar('ram_loss', losses_ra.avg, current_epoch)
                 # while ram_loss > 0.30 and current_epoch >= 80, learning rate decay
-                if args.dataset == 'cub' and 'vgg' in args.arch:
+                if args.dataset == 'cub':
                     if args.decay_points == 'none' and decay_flag is False and losses_ra.avg >= 0.30 and current_epoch >= 80:
                         decay_flag = True
                     elif args.decay_points == 'none' and decay_flag is False and current_epoch >= 120:
                         decay_flag = True
                 if args.dataset == 'ilsvrc':
                     pass
+
+            if 'sos' in args.mode:
+                log_output += '{:.4f} \t'.format(losses_so.avg)
+                writer.add_scalar('sos_loss', losses_so.avg, current_epoch)
 
             if args.spa_loss == 'True':
                 log_output += '{:.4f} \t'.format(losses_spa.avg)
