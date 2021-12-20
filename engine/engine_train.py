@@ -103,8 +103,8 @@ class opts(object):
         self.parser.add_argument("--sa_neu_num", type=float, default=512, help='size of SA linear input')
 
         self.parser.add_argument("--spa_loss", type=str, default='False', help='True or False for sparse loss of gt_scm.')
-        self.parser.add_argument("--spa_loss_weight", type=float, default=0.04, help='loss weight for sparse loss.')
-        self.parser.add_argument("--spa_loss_start", type=int, default=20, help='spa loss start point.')
+        self.parser.add_argument("--spa_loss_weight", type=float, default=0.001, help='loss weight for sparse loss.')
+        self.parser.add_argument("--spa_loss_start", type=int, default=3, help='spa loss start point.')
 
         self.parser.add_argument("--mode", type=str, default='sos+sa', help='spa/sos/spa+sa/sos+sa_v3')
         self.parser.add_argument("--watch_cam", action='store_true', help='save cam each iteration')
@@ -262,7 +262,7 @@ def log_init(args):
     if args.ram:
         losses_ra = AverageMeter()
         log_head += 'loss_ra \t'
-    if args.spa_loss:
+    if args.spa_loss == 'True':
         losses_spa = AverageMeter()
         log_head += 'loss_spa \t'
 
@@ -281,7 +281,7 @@ def warmup_init(args, optimizer, op_params_list):
         if args.dataset == 'ilsvrc':
             cos_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=2, T_mult=1)
         if args.dataset == 'cub':
-            cos_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=4, T_mult=1)
+            cos_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2)
         return cos_scheduler
 
     # set gra warm-up module
@@ -309,7 +309,7 @@ def warmup_init(args, optimizer, op_params_list):
                      ['sa_weight', 'sa_bias'], fine_tune_params]
 
         elif args.dataset == 'cub':
-            raise Exception("on cub-200, LR decay is unused.")
+            raise Exception("For cub-200, gra LR warmup is unused.")
 
         gra_scheduler = GradualWarmupScheduler(optimizer=optimizer, warmup_period=wp_period,
                                                   warmup_node=wp_node, warmup_params=wp_ps,
@@ -332,8 +332,8 @@ def warmup_adjust(args, decay_params, decay_count, decay_flag, decay_once,
                   current_epoch, gra_scheduler):
     return_list = []
     if args.warmup == 'True':  # warmup LR
-        if args.dataset == 'cub':
-            raise Exception("On cub-200, warmup lr is unused.")
+        if args.dataset == 'cub' and args.warmup_fun == 'gra':
+            raise Exception("On cub-200, warmup gra lr is unused.")
         if args.dataset == 'ilsvrc':
             decay_str = decay_params[decay_count]
             if my_optim.reduce_lr(args, optimizer, current_epoch, decay_params=decay_str):

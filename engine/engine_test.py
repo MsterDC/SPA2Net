@@ -3,11 +3,10 @@ sys.path.append('../')
 import os
 import argparse
 import numpy as np
+import time
 
 import torch
 import torch.nn.functional as F
-import cv2
-
 from utils.meters import AverageMeter
 from utils.restore import restore
 from engine.engine_locate import get_topk_boxes_hier, get_topk_boxes_hier_scg, get_topk_boxes_scg_v2, get_box_sos, \
@@ -59,6 +58,8 @@ class opts(object):
         self.parser.add_argument("--scg_fo", action='store_true')
         self.parser.add_argument("--scg_fosc_th", type=float, default=0.2)
         self.parser.add_argument("--scg_sosc_th", type=float, default=1)
+        self.parser.add_argument("--scgv1_bg_th", type=float, default=0.05)
+        self.parser.add_argument("--scgv1_fg_th", type=float, default=0.05)
         self.parser.add_argument("--scg_order", type=int, default=2, help='the order of similarity of HSC.')
         self.parser.add_argument("--scg_so_weight", type=float, default=1)
 
@@ -365,7 +366,6 @@ def eval_loc_all(args, loc_params):
         loc_params.get('label_in'), loc_params.get('gt_boxes'), loc_params.get('input_loc_img'), loc_params.get('idx'), \
         loc_params.get('show_idxs'), loc_params.get('sc_maps_fo'), loc_params.get('sc_maps_so')
     pred_sos = loc_params.get('pred_sos') if 'sos' in args.mode else None
-
     # cls_logits: 20 * 200
     # loc_map: 20 * 200 * 14 * 14
     # input_loc_img: 20 * 200 * 224 * 224
@@ -373,11 +373,14 @@ def eval_loc_all(args, loc_params):
     # sc_maps_fo = [none, none, [20,196,196], [20,196,196]]
     # sc_maps_so = [none, none, [20,196,196], [20,196,196]]
     # pred_sos: 20 * 14 * 14
-
+    time_list = {}
     for th in args.threshold:
+        cam_start_time = time.time()
         locerr_1, locerr_5, gt_known_locerr, top_maps, top5_boxes, gt_known_maps, top1_wrong_detail = \
             eval_loc(cls_logits, loc_map, label_in, gt_boxes, crop_size=args.crop_size, topk=5,
                      threshold=th, mode='union', iou_th=args.iou_th)
+
+        time_list['cam'] = time.time() - cam_start_time
 
         # record CAM localization error
         loc_err['top1_locerr_{}'.format(th)].update(locerr_1, input_loc_img.size()[0])
@@ -400,6 +403,7 @@ def eval_loc_all(args, loc_params):
                       gt_boxes, detail_cam, suffix='cam')
 
         # SCG
+        scg_start_time = time.time()
         sc_maps = []
         if args.scg_com:
             for sc_map_fo_i, sc_map_so_i in zip(sc_maps_fo, sc_maps_so):
@@ -428,12 +432,16 @@ def eval_loc_all(args, loc_params):
             locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
                 eval_loc_scg(cls_logits, top_maps, gt_known_maps, sc_com, label_in,
                              gt_boxes, crop_size=args.crop_size, topk=5, threshold=th, mode='union',
-                             fg_th=0.05, bg_th=0.05, iou_th=args.iou_th, sc_maps_fo=None)
-        if args.scg_version == 'v2':
+                             fg_th=args.scgv1_fg_th, bg_th=args.scgv1_bg_th, iou_th=args.iou_th, sc_maps_fo=None)
+        elif args.scg_version == 'v2':
             locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
                 eval_loc_scg_v2(cls_logits, top_maps, gt_known_maps, sc_com, label_in,
                                 gt_boxes, crop_size=args.crop_size, topk=5, threshold=th, mode='union',
                                 iou_th=args.iou_th, sc_maps_fo=None)
+        else:
+            raise Exception("[Error] Invalid scg method for validation. Please check!")
+
+        time_list['scg'] = time.time() - scg_start_time + time_list['cam']
 
         # record SCG localization error
         loc_err['top1_locerr_scg_{}'.format(th)].update(locerr_1_scg, input_loc_img.size()[0])
@@ -476,8 +484,12 @@ def eval_loc_all(args, loc_params):
 
         # SOS localization
         if 'sos' in args.mode:
+            sos_start_time = time.time()
             locerr_1_sos, locerr_5_sos, gt_known_locerr_sos, top_sos_maps, top5_sos_boxes, top1_wrong_detail_sos = \
                 eval_loc_sos(args, cls_logits, pred_sos, label_in, gt_boxes, threshold=th, iou_th=args.iou_th)
+
+            time_list['sos'] = time.time() - sos_start_time
+
             # record SOS location error
             loc_err['top1_locerr_sos_{}'.format(th)].update(locerr_1_sos, input_loc_img.size()[0])
             loc_err['top5_locerr_sos_{}'.format(th)].update(locerr_5_sos, input_loc_img.size()[0])
@@ -508,12 +520,19 @@ def eval_loc_all(args, loc_params):
         print("Debug-Only Mode: Mission Complete.")
         sys.exit(0)
 
-    return loc_err
+    return loc_err, time_list
 
 
 def print_fun(args, print_params):
     top1_clsacc, top5_clsacc, loc_err = print_params.get('top1_clsacc'), print_params.get(
         'top5_clsacc'), print_params.get('loc_err')
+    time_cam, time_scg, time_sos = print_params.get('time_cam'), print_params.get('time_scg'), print_params.get('time_sos')
+
+    print('== Inference Time ==\n')
+    if 'sos' in args.mode:
+        print('CAM-time: {:.2f} SCG-time: {:.2f} SOS-time: {:.2f}\n'.format(time_cam, time_scg, time_sos))
+    else:
+        print('CAM-time: {:.2f} SCG-time: {:.2f}\n'.format(time_cam, time_scg))
     print('== cls err ==\n')
     print('Top1: {:.2f} Top5: {:.2f}\n'.format(100.0 - top1_clsacc.avg, 100.0 - top5_clsacc.avg))
     for th in args.threshold:
@@ -555,11 +574,16 @@ def print_fun(args, print_params):
 def res_record(args, params):
     top1_clsacc, top5_clsacc, loc_err = params.get('top1_clsacc'), params.get(
         'top5_clsacc'), params.get('loc_err')
-
+    time_cam, time_scg, time_sos = params.get('time_cam'), params.get('time_scg'), params.get(
+        'time_sos')
     setting = args.debug_dir.split('/')[-1]
     results_log_name = '{}_results.log'.format(setting)
     result_log = os.path.join(args.snapshot_dir, results_log_name)
     with open(result_log, 'a') as fw:
+        if 'sos' in args.mode:
+            fw.write('CAM-time: {:.2f} SCG-time: {:.2f} SOS-time: {:.2f}\n'.format(time_cam, time_scg, time_sos))
+        else:
+            fw.write('CAM-time: {:.2f} SCG-time: {:.2f}\n'.format(time_cam, time_scg))
         fw.write('== cls err ')
         fw.write('Top1: {:.2f} Top5: {:.2f}\n'.format(100.0 - top1_clsacc.avg, 100.0 - top5_clsacc.avg))
         for th in args.threshold:
