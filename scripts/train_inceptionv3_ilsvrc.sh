@@ -17,17 +17,17 @@ python train_sst.py \
     --sa_edge_stage=4,5 \
     --sa_head=8 \
     --sa_neu_num=768 \
-    --snapshot_dir=../snapshots/ilsvrc/inceptionv3_sos+sa_v3_#4 \
-    --log_dir=../log/ilsvrc/inceptionv3_sos+sa_v3_#4 \
+    --snapshot_dir=../snapshots/ilsvrc/inceptionv3_spa_#2 \
+    --log_dir=../log/ilsvrc/inceptionv3_spa_#2 \
     --load_finetune=False \
     --pretrained_model=inception_v3_google.pth \
     --pretrained_model_dir=../pretrained_models \
     --batch_size=64 \
-    --gpus=0,1,2,3 \
+    --gpus=0,1,2,3,4,5,6,7 \
     --epoch=20 \
     --warmup=False \
     --warmup_fun=gra \
-    --decay_point=15,17 \
+    --decay_point=10,15 \
     --decay_module=all\;all \
     --lr=0.001 \
     --cls_lr=0.01 \
@@ -36,8 +36,8 @@ python train_sst.py \
     --scg_fosc_th=0.2 \
     --scg_sosc_th=1 \
     --ram \
-    --ram_th_bg=0.4 \
-    --ram_bg_fg_gap=0.1 \
+    --ram_th_bg=0.1 \
+    --ram_bg_fg_gap=0.2 \
     --ram_start=5 \
     --ra_loss_weight=0.5 \
     --sa_start=5 \
@@ -46,4 +46,4 @@ python train_sst.py \
     --sos_loss_weight=0.5 \
     --sos_start=0 \
     --watch_cam \
-    --mode=sos+sa_v3 \
+    --mode=spa \
