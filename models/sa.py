@@ -58,14 +58,15 @@ class ScaledDotProductAttention(nn.Module):
 
         if self_corr is not None:
             self_corr = self_corr.view(bt_sz, -1, nq, nk)
-            enhanced_weight = att_qk + self.edge_weight * self_corr
-            self.enhanced_map = enhanced_weight
-            soft_en_map = torch.softmax(enhanced_weight, -1)
+            
+#             enhanced_weight = att_qk + self.edge_weight * self_corr
+#             self.enhanced_map = enhanced_weight
+#             soft_en_map = torch.softmax(enhanced_weight, -1)
 
-            # soft_en_map = torch.softmax(att_qk, -1)
-            # enhanced_weight = soft_en_map + self.edge_weight * self_corr
-            # self.enhanced_map = enhanced_weight
-            # drop_en_map = self.dropout(enhanced_weight)
+            soft_en_map = torch.softmax(att_qk, -1)
+            enhanced_weight = soft_en_map + self.edge_weight * self_corr
+            self.enhanced_map = enhanced_weight
+            drop_en_map = self.dropout(enhanced_weight)
 
             drop_en_map = self.dropout(soft_en_map)
             att_qkv = torch.matmul(drop_en_map, v).permute(0, 2, 1, 3).contiguous().view(bt_sz, nq, self.h * self.d_v)  # (b_s, nq, h*d_v)
