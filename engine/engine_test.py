@@ -30,7 +30,6 @@ class opts(object):
         self.parser.add_argument("--img_dir", type=str, default='')
         self.parser.add_argument("--test_list", type=str, default='')
         self.parser.add_argument("--test_box", type=str, default='')
-        self.parser.add_argument("--batch_size", type=int, default=1)
         self.parser.add_argument("--input_size", type=int, default=256)
         self.parser.add_argument("--crop_size", type=int, default=224)
         self.parser.add_argument("--dataset", type=str, default='cub')
@@ -53,9 +52,9 @@ class opts(object):
         self.parser.add_argument("--iou_th", type=float, default=0.5, help='the threshold for iou.')
 
         self.parser.add_argument("--scg_version", type=str, default='v2', help='v1 / v2')
-        self.parser.add_argument("--scg_blocks", type=str, default='2,3,4,5', help='2 for feat2, etc.')
-        self.parser.add_argument("--scg_com", action='store_true')
-        self.parser.add_argument("--scg_fo", action='store_true')
+        self.parser.add_argument("--scg_blocks", type=str, default='4,5', help='2 for feat2, etc.')
+        self.parser.add_argument("--scg_com", action='store_true', help='fuse fo and so or not.')
+        self.parser.add_argument("--scg_fo", action='store_true', help='only use fo.')
         self.parser.add_argument("--scg_fosc_th", type=float, default=0.2)
         self.parser.add_argument("--scg_sosc_th", type=float, default=1)
         self.parser.add_argument("--scgv1_bg_th", type=float, default=0.05)
@@ -65,6 +64,7 @@ class opts(object):
 
         self.parser.add_argument("--snapshot_dir", type=str, default='../snapshots')
         self.parser.add_argument("--debug_dir", type=str, default='../debug', help='save visualization results.')
+        self.parser.add_argument("--batch_size", type=int, default=1)
         self.parser.add_argument("--threshold", type=str, default='0.1,0.5', help='value range of threshold')
         self.parser.add_argument("--gpus", type=str, default='0', help='-1 for cpu, split gpu id by comma')
 

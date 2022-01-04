@@ -134,6 +134,11 @@ def get_model(args):
     sos_lr = args.sos_lr if ('sos' in args.mode) else None
     sa_lr = args.sa_lr if ('sa' in args.mode) else None
 
+    # test for denoising cls loss
+    # denoise_layer = ['denoise']
+    # denoise_weight_list = []
+    # denoise_bias_list = []
+
     cls_layer = ['cls']
     cls_weight_list = []
     cls_bias_list = []
@@ -156,6 +161,13 @@ def get_model(args):
                 cls_weight_list.append(value)
             elif 'bias' in name:
                 cls_bias_list.append(value)
+        # test for denoising cls loss
+        # elif denoise_layer[0] in name:
+        #     print("denoise-layer's learning rate:", cls_lr, " => ", name)
+        #     if 'weight' in name:
+        #         denoise_weight_list.append(value)
+        #     elif 'bias' in name:
+        #         denoise_bias_list.append(value)
         elif ('sos' in args.mode) and sos_layer[0] in name:
             print("sos-layer's learning rate:", sos_lr, " => ", name)
             if 'weight' in name:
@@ -175,9 +187,12 @@ def get_model(args):
             elif 'bias' in name:
                 other_bias_list.append(value)
     # set params list
+    # test for denoising cls loss
     op_params_list = [{'params': other_weight_list, 'lr': lr}, {'params': other_bias_list, 'lr': lr * 2},
+                      # {'params': denoise_weight_list, 'lr': cls_lr}, {'params': denoise_bias_list, 'lr': cls_lr * 2},
                       {'params': cls_weight_list, 'lr': cls_lr}, {'params': cls_bias_list, 'lr': cls_lr * 2}]
     optim_params_list = ['other_weight', 'other_bias', 'cls_weight', 'cls_bias']
+    # optim_params_list = ['other_weight', 'other_bias', 'denoise_weight', 'denoise_bias', 'cls_weight', 'cls_bias']
 
     if 'sos' in args.mode:
         op_params_list.append({'params': sos_weight_list, 'lr': sos_lr})
@@ -198,6 +213,7 @@ def save_checkpoint(args, state, is_best, filename='checkpoint.pth.tar'):
     torch.save(state, savepath)
     if is_best:
         shutil.copyfile(savepath, os.path.join(args.snapshot_dir, 'model_best.pth.tar'))
+
 
 def set_decay_modules(decay_module):
     # set parameter_lr for decay and increasing
@@ -223,6 +239,7 @@ def set_decay_modules(decay_module):
     decay_params.append(None)
     return decay_params
 
+
 def reproducibility_set(args):
     # for reproducibility
     if args.seed is not None:
@@ -245,12 +262,16 @@ def reproducibility_set(args):
 def log_init(args):
     batch_time = AverageMeter()
     losses = AverageMeter()
+    # test for denoising loss
+    # denoise_loss = AverageMeter()
     cls_loss = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
     return_params = [batch_time, losses, cls_loss, top1, top5]
-
+    # test for denoising loss
+    # return_params = [batch_time, losses, denoise_loss, cls_loss, top1, top5]
     log_head = '#epoch \t loss \t cls_loss \t pred@1 \t pred@5 \t'
+    # log_head = '#epoch \t loss \t denoise_loss \t cls_loss \t pred@1 \t pred@5 \t'
 
     losses_so = None
     losses_ra = None
@@ -274,6 +295,7 @@ def log_init(args):
     return_params.append(log_head)
 
     return return_params
+
 
 def warmup_init(args, optimizer, op_params_list):
     if args.warmup_fun == 'cos':

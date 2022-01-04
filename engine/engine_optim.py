@@ -84,6 +84,7 @@ def reduce_lr(args, optimizer, epoch, factor=0.1, decay_params=None):
     else:
         return False
 
+
 def increase_lr(args, optimizer, epoch, factor=10, increase_params=None):
     if increase_params is not None:
         increase_params = increase_params.strip().split(',')
