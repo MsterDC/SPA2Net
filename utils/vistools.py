@@ -51,9 +51,9 @@ def debug_vis_sc(args, idx, show_idxs, img_path, sc_maps_fo_fuse, sc_maps_so_fus
                                                                                             region_wrong)
             debug_dir = os.path.join(args.debug_dir, top1_wrong_detail_dir) if args.debug_detail else args.debug_dir
             for show_id in show_idxs:
-                save_im_sim(args, img_path[show_id], sc_maps_fo_fuse[show_id], debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix=suffix[0])
-                save_im_sim(args, img_path[show_id], sc_maps_so_fuse[show_id], debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix=suffix[1])
-                save_im_sim(args, img_path[show_id], sc_maps_fuse[show_id], debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix=suffix[-1])
+                save_im_sim(img_path[show_id], sc_maps_fo_fuse[show_id], debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix=suffix[0])
+                save_im_sim(img_path[show_id], sc_maps_so_fuse[show_id], debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix=suffix[1])
+                save_im_sim(img_path[show_id], sc_maps_fuse[show_id], debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix=suffix[-1])
         pass
 
 
@@ -66,6 +66,7 @@ def save_im_heatmap_box(im_file, top_maps, topk_boxes, save_dir, gt_label=None, 
     draw_hm = 255 * np.ones((h + 15, w, 3), np.uint8)  # (h+15, w, 3)
     cam_to_save = [draw_hm.copy()]
     draw_im[:h, :, :] = im
+
     if gt_box is not None:
         gt_box = gt_box.split()
         box_cnt = len(gt_box) // 4
@@ -73,10 +74,17 @@ def save_im_heatmap_box(im_file, top_maps, topk_boxes, save_dir, gt_label=None, 
         loc_flag = False
         for i in range(box_cnt):
             gt_bbox = gt_box[i * 4:(i + 1) * 4]
-            cv2.rectangle(draw_im, (gt_bbox[0], gt_bbox[1]), (gt_bbox[2], gt_bbox[3]), color=(0, 0, 255), thickness=2)
+            left_top_x, left_top_y, right_bottom_x, right_bottom_y = gt_bbox
+            ori_left_top_x = int(left_top_x * w / 224)  # [Attention] 224 is the cropped size
+            ori_left_top_y = int(left_top_y * h / 224)
+            ori_right_bottom_x = int(right_bottom_x * w / 224)
+            ori_right_bottom_y = int(right_bottom_y * h / 224)
+            cv2.rectangle(draw_im, (ori_left_top_x, ori_left_top_y),
+                          (ori_right_bottom_x, ori_right_bottom_y),
+                          color=(0, 0, 255), thickness=2)
+
     cv2.putText(draw_im, 'original image: {}'.format(threshold), (0, h + 12), color=(0, 0, 0),
-                fontFace=cv2.FONT_HERSHEY_COMPLEX,
-                fontScale=0.5)
+                fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=0.5)
     im_to_save = [draw_im.copy()]
     for cls_box, cam_map_cls in zip(topk_boxes, top_maps):
         draw_im = 255 * np.ones((h + 15, w, 3), np.uint8)
@@ -208,7 +216,7 @@ def save_sim_heatmap_box(im_file, top_maps, save_dir, gt_label=None, sim_map=Non
     cv2.imwrite(os.path.join(save_dir, save_name), final_to_save)
 
 
-def save_im_sim(args, im_file, aff_maps, save_dir, suffix='', gt_label=None, epoch=100):
+def save_im_sim(im_file, aff_maps, save_dir, suffix='', gt_label=None, epoch=100):
     if isinstance(aff_maps, tuple) or isinstance(aff_maps, list):
         pass
     else:
@@ -275,21 +283,12 @@ def save_im_sim(args, im_file, aff_maps, save_dir, suffix='', gt_label=None, epo
     im_to_save = np.concatenate((im_to_save, aff_to_save), axis=0)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    # save_name = str(gt_label[0]) + '_' + str(epoch) + '_' + im_file.split('/')[-1]
     save_name = str(gt_label) + '_' + str(epoch) + '_' + im_file.split('/')[-1]
     save_name = save_name.replace('.', '_sim_{}.'.format(suffix))
     cv2.imwrite(os.path.join(save_dir, save_name), im_to_save)
 
 
 def cal_iou(box1, box2):
-    """
-    support:
-    1. box1 and box2 are the same shape: [N, 4]
-    2.
-    :param box1:
-    :param box2:
-    :return:
-    """
     box1 = np.asarray(box1, dtype=float)
     box2 = np.asarray(box2, dtype=float)
     if box1.ndim == 1:
