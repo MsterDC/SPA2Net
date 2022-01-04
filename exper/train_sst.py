@@ -11,11 +11,9 @@ from tensorboardX import SummaryWriter
 
 from engine.engine_train import get_model, opts, save_checkpoint, reproducibility_set, log_init, warmup_init, set_decay_modules, warmup_adjust
 from engine.engine_loader import data_loader
-import engine.engine_optim as my_optim
 from utils import evaluate
 from utils.snapshot import save_cam, save_sos, save_scm
 from utils.restore import restore
-
 
 
 def train(args):
@@ -181,7 +179,7 @@ def train(args):
             optimizer.step()
 
             # GAP
-            cls_logits =  torch.mean(torch.mean(logits, dim=2), dim=2)
+            cls_logits = torch.mean(torch.mean(logits, dim=2), dim=2)
 
             if not args.onehot == 'True':
                 prec1, prec5 = evaluate.accuracy(cls_logits.data, label.long(), topk=(1, 5))
@@ -223,6 +221,7 @@ def train(args):
                                                                                eta_str_epoch=eta_str_epoch, loss=losses,
                                                                                loss_cls=losses_cls,
                                                                                top1=top1, top5=top5)
+
                 if 'sos' in args.mode:
                     log_output += 'Loss_so {loss_so.val:.4f} ({loss_so.avg:.4f})\t'.format(loss_so=losses_so)
 
@@ -281,18 +280,21 @@ def train(args):
 
         # save training record
         with open(os.path.join(args.snapshot_dir, 'train_record.csv'), 'a') as fw:
-            log_output = '{} \t {:.4f} \t {:.3f} \t {:.3f} \t {:.3f} \t'.format(current_epoch, losses.avg, losses_cls.avg, top1.avg, top5.avg)
+            # test for denoising cls loss.
+            log_output = '{} \t {:.4f} \t {:.3f} \t {:.3f} \t {:.3f} \t'.format(current_epoch, losses.avg,
+                                                                                # losses_denoise.avg,
+                                                                                losses_cls.avg,
+                                                                                top1.avg, top5.avg)
             writer.add_scalar('loss_epoch', losses.avg, current_epoch)
             writer.add_scalar('cls_loss_epoch', losses_cls.avg, current_epoch)
 
             if args.ram:
                 log_output += '{:.4f} \t'.format(losses_ra.avg)
                 writer.add_scalar('ram_loss', losses_ra.avg, current_epoch)
-                # while ram_loss > 0.30 and current_epoch >= 80, learning rate decay
                 if args.dataset == 'cub':
                     if args.decay_points == 'none' and decay_flag is False and losses_ra.avg >= 0.30 and current_epoch >= 80:
                         decay_flag = True
-                    elif args.decay_points == 'none' and decay_flag is False and current_epoch >= 120:
+                    elif args.decay_points == 'none' and decay_flag is False and current_epoch >= 99:
                         decay_flag = True
                 if args.dataset == 'ilsvrc':
                     pass
