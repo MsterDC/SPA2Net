@@ -5,7 +5,11 @@ PyTorch implementation for SPA-Net.
 
 ### 🔥 Download fine-tuned model for training Inception-V3 on `ILSVRC`.
 * [GoogleDrive](https://drive.google.com/file/d/1JsiRQHV39Cr6DTP1MwjAZ-hG4dztdIQS/view?usp=sharing)
-* After downloading, put the model into `snapshots/ilsvrc/inceptionv3_cls/`
+* After downloading, ensure `inceptionv3_cls.zip` in `snapshots/ilsvrc/` and execute following:
+```
+unzip inceptionv3_cls.zip
+```
+* The model file will be unzipped in this directory `snapshots/ilsvrc/inceptionv3_cls/`
 
 ### 🔥 Download fine-tuned model for training VGG16 on `ILSVRC`.
 * [BaiduNetdisk](https://pan.baidu.com/s/1-bsNxmqaheHW72umm408uA) code：6ih2 
