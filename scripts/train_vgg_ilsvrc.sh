@@ -13,25 +13,24 @@ python train_sst.py \
     --sos_gt_seg=True \
     --sos_seg_method=TC \
     --sos_loss_method=BCE \
-    --sa_use_edge=True \
     --sa_edge_stage=4,5 \
     --sa_head=8 \
     --sa_neu_num=512 \
-    --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_fine_tune_#1 \
-    --log_dir=../log/ilsvrc/vgg16_sos+sa_v3_fine_tune_#1 \
+    --snapshot_dir=../snapshots/ilsvrc/vgg16_spa+sa_#6 \
+    --log_dir=../log/ilsvrc/vgg16_spa+sa_#6 \
     --load_finetune=True \
     --pretrained_model=ilsvrc_epoch_20.pth.tar \
     --pretrained_model_dir=../snapshots/ilsvrc/vgg16_spa_#1 \
     --batch_size=64 \
-    --gpus=0,1,2,3,4,5,6,7 \
+    --gpus=0,1 \
     --epoch=20 \
     --warmup=False \
     --warmup_fun=gra \
     --decay_point=15,17 \
-    --decay_module=bb,cls,sa\;bb,cls,sa \
+    --decay_module=all\;all \
     --lr=0.001 \
     --cls_lr=0.001 \
-    --sos_lr=0.0001 \
+    --sos_lr=0.00005 \
     --sa_lr=0.001 \
     --ram \
     --ra_loss_weight=0.5 \
@@ -43,10 +42,11 @@ python train_sst.py \
     --spa_loss_start=3 \
     --scg_fosc_th=0.2 \
     --scg_sosc_th=1 \
-    --sos_fg_th=0.5 \
-    --sos_bg_th=0.3 \
+    --sos_fg_th=0.2 \
+    --sos_bg_th=0.1 \
     --sos_loss_weight=1 \
     --sos_start=0 \
     --sa_start=0 \
+    --sa_use_edge=False \
     --watch_cam \
-    --mode=sos+sa_v3 \
+    --mode=spa+sa \

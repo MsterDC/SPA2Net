@@ -9,6 +9,7 @@ python train_sst.py \
     --train_list=../data/ILSVRC/list/train_list.txt \
     --num_classes=1000 \
     --scg_com \
+    --sos_start=0 \
     --scg_blocks=4,5 \
     --sos_gt_seg=True \
     --sos_seg_method=TC \
@@ -17,34 +18,32 @@ python train_sst.py \
     --sa_edge_stage=4,5 \
     --sa_head=8 \
     --sa_neu_num=768 \
-    --snapshot_dir=../snapshots/ilsvrc/inceptionv3_sos+sa_v3_#8 \
-    --log_dir=../log/ilsvrc/inceptionv3_sos+sa_v3_#8 \
-    --load_finetune=False \
-    --pretrained_model=inception_v3_google.pth \
-    --pretrained_model_dir=../pretrained_models \
+    --watch_cam \
+    --snapshot_dir=../snapshots/ilsvrc/inceptionv3_sos+sa_v3_#14 \
+    --log_dir=../log/ilsvrc/inceptionv3_sos+sa_v3_#14 \
+    --load_finetune=True \
+    --pretrained_model=ilsvrc_epoch_20.pth.tar \
+    --pretrained_model_dir=../snapshots/ilsvrc/inceptionv3_cls \
     --batch_size=64 \
-    --gpus=0,1,2,3,4,5,6,7 \
+    --gpus=0,1,2,3 \
     --epoch=20 \
     --warmup=False \
     --warmup_fun=gra \
-    --decay_point=10,15 \
+    --decay_point=15,17 \
     --decay_module=all\;all \
     --lr=0.001 \
     --cls_lr=0.001 \
-    --sa_lr=0.001 \
+    --sa_lr=0.01 \
     --sos_lr=0.00005 \
     --scg_fosc_th=0.2 \
     --scg_sosc_th=1 \
-    --ram \
-    --ram_th_bg=0.4 \
-    --ram_bg_fg_gap=0.1 \
-    --ram_start=5 \
-    --ra_loss_weight=0.5 \
-    --sa_start=5 \
+    --sa_start=0 \
     --sos_fg_th=0.4 \
     --sos_bg_th=0.3 \
     --sos_loss_weight=0.5 \
-    --sos_start=0 \
-    --watch_cam \
+    --ram_th_bg=0.1 \
+    --ram_bg_fg_gap=0 \
+    --ram_start=0 \
+    --ra_loss_weight=0.5 \
     --mode=sos+sa_v3 \
-
+    --ram \
