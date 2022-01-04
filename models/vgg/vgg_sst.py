@@ -7,7 +7,7 @@ import torch.utils.model_zoo as model_zoo
 import torch.nn.functional as F
 
 from utils.vistools import norm_for_batch_map
-from .sa import ScaledDotProductAttention
+from models.sa import ScaledDotProductAttention
 
 __all__ = [
     'VGG', 'vgg11', 'vgg11_bn', 'vgg13', 'vgg13_bn', 'vgg16', 'vgg16_bn',
@@ -36,6 +36,14 @@ class VGG(nn.Module):
         self.num_classes = num_classes
         # self.normalize = NormalizationFamily()
         self.args = args
+
+        # test for adding another cls_head for de-noising
+        # self.denoise = nn.Sequential(
+        #     nn.Conv2d(512, 1024, kernel_size=3, padding=1, dilation=1),  # fc6
+        #     nn.ReLU(True),
+        #     nn.Conv2d(1024, 1024, kernel_size=3, padding=1, dilation=1),  # fc7
+        #     nn.ReLU(True),
+        #     nn.Conv2d(1024, self.num_classes, kernel_size=1, padding=0))
 
         self.cls = nn.Sequential(
             nn.Conv2d(512, 1024, kernel_size=3, padding=1, dilation=1),  # fc6
@@ -193,6 +201,11 @@ class VGG(nn.Module):
     def get_cls_loss(self, logits, label):
         return self.ce_loss(logits, label.long())
 
+    # test for denoising loss
+    # def get_denoise_loss(self, logits, label):
+    #     cls_logits = torch.mean(torch.mean(logits, dim=2), dim=2)
+    #     return self.ce_loss(cls_logits, label.long())
+
     def get_ra_loss(self, logits, label, th_bg=0.3, bg_fg_gap=0.0):
         n, _, _, _ = logits.size()
         cls_logits = F.softmax(logits, dim=1)
@@ -215,7 +228,9 @@ class VGG(nn.Module):
         cls_logits = torch.mean(torch.mean(logits, dim=2), dim=2)
         # get cls loss
         cls_loss = self.get_cls_loss(cls_logits, label)
+        # loss = loss + 2 * cls_loss
         loss = loss + cls_loss
+
         if 'sos' in self.args.mode and epoch >= self.args.sos_start:
             sos_loss = self.get_sos_loss(pred_sos, gt_sos)
             loss += self.args.sos_loss_weight * sos_loss
@@ -277,6 +292,32 @@ class VGG(nn.Module):
         if not train_flag:
             sc_fo, sc_so = self.cal_sc(feat)
         return cls_map, sc_fo, sc_so  # 训练时sc_fo和sc_so=None
+
+    # def _forward_spa_sa(self, train_flag, current_epoch, feat):
+    #     f12, f3, f4, f5 = feat
+    #     batch, channel, _, _ = f5.shape
+    #     sc_fo, sc_so = None, None
+    #     denoise_map = None
+    #     if train_flag:
+    #         # add denoise cls loss
+    #         denoise_map = self.denoise(f5)
+    #         if current_epoch >= self.args.sa_start:
+    #             sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
+    #             ho_self_corr = None
+    #             if self.args.sa_use_edge == 'True':
+    #                 ho_self_corr = self.cal_edge((f4, f5))
+    #             cls_in = self.sa(sa_in, sa_in, sa_in, ho_self_corr)
+    #         else:
+    #             cls_in = f5
+    #     else:
+    #         sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
+    #         sc_fo, sc_so = self.cal_sc(feat)
+    #         edge_code = None
+    #         if self.args.sa_use_edge == 'True':
+    #             edge_code = self.cal_edge((f4, f5))
+    #         cls_in = self.sa(sa_in, sa_in, sa_in, edge_code)
+    #     cls_map = self.cls(cls_in)
+    #     return denoise_map, cls_map, sc_fo, sc_so
 
     def _forward_spa_sa(self, train_flag, current_epoch, feat):
         f12, f3, f4, f5 = feat
