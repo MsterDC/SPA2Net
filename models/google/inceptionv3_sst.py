@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 
 from utils.vistools import norm_for_batch_map
-from .sa import ScaledDotProductAttention
+from models.sa import ScaledDotProductAttention
 
 __all__ = ['Inception3', 'model']
 
@@ -52,6 +52,49 @@ def model(pretrained=False, **kwargs):
         return model
 
     return Inception3(**kwargs)
+
+
+def load_finetune(pretrained=True, **kwargs):
+    # construct model
+    if pretrained:
+        model = Inception3(**kwargs)
+        model_dict = model.state_dict()
+        pretrained_file = os.path.join(kwargs['args'].pretrained_model_dir, kwargs['args'].pretrained_model)
+        if os.path.isfile(pretrained_file):
+            try:
+                pretrained_dict = torch.load(pretrained_file)
+                if 'state_dict' in pretrained_dict.keys():
+                    pretrained_dict = remove_prefix(pretrained_dict['state_dict'], 'module.')
+                else:
+                    pretrained_dict = remove_prefix(pretrained_dict, 'module.')
+                print('load fine-tuned model from {}'.format(pretrained_file))
+            except KeyError:
+                print("Loading fine-tuned model failed.")
+        else:
+            raise Exception('[Error] Fine-tuned model does not exist, please check.')
+        # *. show the loading information
+        for k in pretrained_dict.keys():
+            if k not in model_dict:
+                print('Key {} is removed from fine-tuned model.'.format(k))
+        print(' ')
+        for k in model_dict.keys():
+            if k not in pretrained_dict:
+                print('Key {} is new added for SPA-Net.'.format(k))
+        # 1. filter out unnecessary keys
+        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+        # 2. overwrite entries in the existing state dict
+        model_dict.update(pretrained_dict)
+        # 3. load the new state dict
+        model.load_state_dict(model_dict)
+        return model
+    else:
+        raise Exception('[Error] Load fine-tune model is only used in training mode.')
+
+
+def remove_prefix(state_dict, prefix):
+    print('remove prefix \'{}\''.format(prefix))
+    f = lambda x: x.split(prefix, 1)[-1] if x.startswith(prefix) else x
+    return {f(key): value for key, value in state_dict.items()}
 
 
 class Inception3(nn.Module):
