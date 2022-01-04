@@ -25,7 +25,7 @@ python train_sst.py \
     --pretrained_model=ilsvrc_epoch_20.pth.tar \
     --pretrained_model_dir=../snapshots/ilsvrc/inceptionv3_cls \
     --batch_size=64 \
-    --gpus=0,1,2,3 \
+    --gpus=0,1,2,3,4,5,6,7 \
     --epoch=20 \
     --warmup=False \
     --warmup_fun=gra \
