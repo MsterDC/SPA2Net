@@ -19,8 +19,8 @@ python train_sst.py \
     --sa_head=8 \
     --sa_neu_num=768 \
     --watch_cam \
-    --snapshot_dir=../snapshots/ilsvrc/inceptionv3_sos+sa_v3_#14 \
-    --log_dir=../log/ilsvrc/inceptionv3_sos+sa_v3_#14 \
+    --snapshot_dir=../snapshots/ilsvrc/inceptionv3_sos+sa_v3_#15 \
+    --log_dir=../log/ilsvrc/inceptionv3_sos+sa_v3_#15 \
     --load_finetune=True \
     --pretrained_model=ilsvrc_epoch_20.pth.tar \
     --pretrained_model_dir=../snapshots/ilsvrc/inceptionv3_cls \
