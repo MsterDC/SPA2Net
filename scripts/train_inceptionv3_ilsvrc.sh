@@ -19,8 +19,8 @@ python train_sst.py \
     --sa_head=8 \
     --sa_neu_num=768 \
     --watch_cam \
-    --snapshot_dir=../snapshots/ilsvrc/inceptionv3_sos+sa_v3_#15 \
-    --log_dir=../log/ilsvrc/inceptionv3_sos+sa_v3_#15 \
+    --snapshot_dir=../snapshots/ilsvrc/inceptionv3_sos+sa_v3_#21 \
+    --log_dir=../log/ilsvrc/inceptionv3_sos+sa_v3_#21 \
     --load_finetune=True \
     --pretrained_model=ilsvrc_epoch_20.pth.tar \
     --pretrained_model_dir=../snapshots/ilsvrc/inceptionv3_cls \
@@ -35,16 +35,16 @@ python train_sst.py \
     --cls_lr=0.001 \
     --sa_lr=0.01 \
     --sos_lr=0.00005 \
-    --scg_fosc_th=0.2 \
-    --scg_sosc_th=1 \
+    --scg_fosc_th=0.1 \
+    --scg_sosc_th=0.5 \
     --sa_start=0 \
     --sos_fg_th=0.4 \
     --sos_bg_th=0.3 \
     --sos_loss_weight=0.5 \
     --ram_th_bg=0.1 \
-    --ram_bg_fg_gap=0 \
+    --ram_bg_fg_gap=0.8 \
     --ram_start=0 \
-    --ra_loss_weight=0.5 \
+    --ra_loss_weight=0.1 \
     --mode=sos+sa_v3 \
     --ram \
 
