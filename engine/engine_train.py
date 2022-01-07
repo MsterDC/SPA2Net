@@ -106,7 +106,7 @@ class opts(object):
         self.parser.add_argument("--spa_loss_weight", type=float, default=0.001, help='loss weight for sparse loss.')
         self.parser.add_argument("--spa_loss_start", type=int, default=3, help='spa loss start point.')
 
-        self.parser.add_argument("--mode", type=str, default='sos+sa', help='spa/sos/spa+sa/sos+sa_v3')
+        self.parser.add_argument("--mode", type=str, default='sos+sa_v3', help='spa/sos/spa+sa/sos+sa_v3')
         self.parser.add_argument("--watch_cam", action='store_true', help='save cam each iteration')
 
     def parse(self):
