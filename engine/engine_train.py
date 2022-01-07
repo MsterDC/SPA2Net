@@ -37,9 +37,9 @@ class opts(object):
         self.parser.add_argument("--crop_size", type=int, default=224)
         self.parser.add_argument("--dataset", type=str, default='cub')
         self.parser.add_argument("--num_classes", type=int, default=200)
-        self.parser.add_argument("--arch", type=str, default='vgg_DA')
+        self.parser.add_argument("--arch", type=str, default='vgg_sst')
         self.parser.add_argument("--in_norm", type=str, default='True', help='normalize input or not')
-        self.parser.add_argument("--num_workers", type=int, default=12)
+        self.parser.add_argument("--num_workers", type=int, default=16)
         self.parser.add_argument("--disp_interval", type=int, default=DISP_INTERVAL)
 
         self.parser.add_argument("--tencrop", type=str, default='False')
