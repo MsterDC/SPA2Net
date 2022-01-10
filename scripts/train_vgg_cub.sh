@@ -9,36 +9,36 @@ python train_sst.py \
     --train_list=../data/CUB_200_2011/list/train.txt \
     --num_classes=200 \
     --scg_com \
-    --scg_blocks=4,5 \
-    --ram_start=20 \
+    --sa_head=8 \
     --sos_start=0 \
-    --sos_gt_seg=True \
-    --sos_seg_method=TC \
-    --sos_loss_method=BCE \
-    --sos_fg_th=0.2 \
-    --sos_bg_th=0.1 \
-    --sa_edge_stage=4,5 \
-    --sa_start=20 \
-    --sa_neu_num=512 \
-    --snapshot_dir=../snapshots/vgg16_sos+sa_v3_repo_#1 \
-    --log_dir=../log/vgg16_sos+sa_v3_repo_#1 \
+    --watch_cam \
+    --snapshot_dir=../snapshots/vgg16_sos+sa_v3_rept_#1 \
+    --log_dir=../log/vgg16_sos+sa_v3_rept_#1 \
+    --resume=False \
+    --restore_from=cub_epoch_100.pth.tar \
+    --load_finetune=True \
+    --finetuned_model_dir=../snapshots/vgg16_cls \
+    --finetuned_model=cub_epoch_100.pth.tar \
     --epoch=100 \
     --decay_points=80 \
     --decay_module=all \
     --batch_size=64 \
     --gpus=0,1,2,3 \
     --lr=0.001 \
-    --cls_lr=0.01 \
+    --cls_lr=0.001 \
     --sos_lr=0.00005 \
-    --sa_lr=0.005 \
+    --sa_lr=0.001 \
+    --freeze=True \
     --scg_fosc_th=0.2 \
     --scg_sosc_th=1 \
-    --ra_loss_weight=0.5 \
-    --ram_th_bg=0.1 \
-    --ram_bg_fg_gap=0.2 \
-    --sa_head=8 \
+    --sa_start=0 \
     --sa_use_edge=True \
     --sos_loss_weight=0.5 \
-    --mode=sos+sa_v3 \
-    --watch_cam \
+    --sos_fg_th=0.2 \
+    --sos_bg_th=0.1 \
     --ram \
+    --ram_start=0 \
+    --ram_loss_weight=0.5 \
+    --ram_th_bg=0.1 \
+    --ram_bg_fg_gap=0.2 \
+    --mode=sos+sa_v3 \
