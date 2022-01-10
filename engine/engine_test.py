@@ -15,10 +15,6 @@ from utils import evaluate, norm_atten_map
 from utils.vistools import debug_vis_loc, debug_vis_sc
 from models import *
 
-LR = 0.001
-EPOCH = 200
-DISP_INTERVAL = 50
-
 # default settings
 ROOT_DIR = os.getcwd()
 
@@ -33,21 +29,19 @@ class opts(object):
         self.parser.add_argument("--input_size", type=int, default=256)
         self.parser.add_argument("--crop_size", type=int, default=224)
         self.parser.add_argument("--dataset", type=str, default='cub')
-        self.parser.add_argument("--num_classes", type=int, default=200)
-        self.parser.add_argument("--arch", type=str, default='vgg_sst')
-        self.parser.add_argument("--lr", type=float, default=LR)
-        self.parser.add_argument("--decay_points", type=str, default='none')
-        self.parser.add_argument("--epoch", type=int, default=EPOCH)
+        self.parser.add_argument("--num_classes", type=int)
+        self.parser.add_argument("--arch", type=str)
+        self.parser.add_argument("--lr", type=float)
+        self.parser.add_argument("--decay_points", type=str)
+        self.parser.add_argument("--epoch", type=int, default=200)
         self.parser.add_argument("--tencrop", type=str, default='True')
         self.parser.add_argument("--onehot", type=str, default='False')
-        self.parser.add_argument("--num_workers", type=int, default=12)
-        self.parser.add_argument("--disp_interval", type=int, default=DISP_INTERVAL)
+        self.parser.add_argument("--num_workers", type=int, default=16)
+        self.parser.add_argument("--disp_interval", type=int, default=50)
         self.parser.add_argument("--resume", type=str, default='True')
         self.parser.add_argument("--restore_from", type=str, default='')
         self.parser.add_argument("--global_counter", type=int, default=0)
         self.parser.add_argument("--current_epoch", type=int, default=0)
-        self.parser.add_argument("--debug_detail", action='store_true', help='.')
-        self.parser.add_argument("--vis_dir", type=str, default='../vis_dir', help='save visualization results.')
         self.parser.add_argument("--in_norm", type=str, default='True', help='normalize input or not')
         self.parser.add_argument("--iou_th", type=float, default=0.5, help='the threshold for iou.')
 
@@ -59,8 +53,6 @@ class opts(object):
         self.parser.add_argument("--scg_sosc_th", type=float, default=1)
         self.parser.add_argument("--scgv1_bg_th", type=float, default=0.05)
         self.parser.add_argument("--scgv1_fg_th", type=float, default=0.05)
-        self.parser.add_argument("--scg_order", type=int, default=2, help='the order of similarity of HSC.')
-        self.parser.add_argument("--scg_so_weight", type=float, default=1)
 
         self.parser.add_argument("--snapshot_dir", type=str, default='../snapshots')
         self.parser.add_argument("--debug_dir", type=str, default='../debug', help='save visualization results.')
@@ -71,16 +63,15 @@ class opts(object):
         self.parser.add_argument("--sos_seg_method", type=str, default='TC', help='BC / TC')
         self.parser.add_argument("--sos_loss_method", type=str, default='BCE', help='BCE / MSE')
 
-        self.parser.add_argument("--sa_use_edge", type=str, default='True', help='Add edge encoding or not')
-        self.parser.add_argument("--sa_edge_weight", type=float, default=1, help='weight for edge-encoding.')
+        self.parser.add_argument("--sa_use_edge", type=str, help='Add edge encoding or not')
         self.parser.add_argument("--sa_edge_stage", type=str, default='4,5', help='4 for feat4, etc.')
-        self.parser.add_argument("--sa_head", type=float, default=8, help='number of SA heads')
-        self.parser.add_argument("--sa_neu_num", type=float, default=512, help='channel num')
+        self.parser.add_argument("--sa_head", type=float, help='number of SA heads')
+        self.parser.add_argument("--sa_neu_num", type=float, help='channel num')
 
         self.parser.add_argument("--mode", type=str, default='sos+sa_v3')
         self.parser.add_argument("--debug", action='store_true', help='.')
         self.parser.add_argument("--debug_num", type=int, default=10, help='visualization number, eg, 100')
-        self.parser.add_argument("--debug_only", action='store_true', help='debug until debug_num')
+        self.parser.add_argument("--debug_only", type=str, default='False', help='True or False')
 
         self.parser.add_argument("--mask_save", type=str, default='False', help='for saving activation maps.')
         self.parser.add_argument("--mask_path", type=str, default='../results', help='path for saving activation maps.')
@@ -94,17 +85,17 @@ class opts(object):
         th_range = list(map(float, opt.threshold.split(',')))
         if len(th_range) != 2:
             raise Exception('[Error] You should specify the value range of threshold.')
+        if 'sa' in opt.mode:
+            opt.sa_neu_num = 512 if 'vgg' in opt.arch else 768
         # eval the training mode
-        mode = ['spa', 'sos', 'spa+sa', 'sos+sa_v3']
-        if opt.mode not in mode:
+        support_mode = ['spa', 'sos', 'spa+sa', 'sos+sa_v3']
+        if opt.mode not in support_mode:
             raise Exception('[Error] Invalid training mode, please check.')
         # sparse the thresholds
         opt.threshold = []
         for th in np.arange(th_range[0], th_range[-1], 0.05):
             opt.threshold.append(round(float(th), 2))
         opt.threshold.append(th_range[-1])
-        for th in opt.threshold:
-            print("Threshold:", th, end=',')
         # pin the mask save path
         if opt.mask_save == 'True':
             exp_id = opt.snapshot_dir.split('/')[-1]
@@ -361,18 +352,24 @@ def init_meters(args):
 
 
 def eval_loc_all(args, loc_params):
-    loc_err, cls_logits, loc_map, img_path, label_in, gt_boxes, input_loc_img, idx, show_idxs, sc_maps_fo, sc_maps_so = \
-        loc_params.get('loc_err'), loc_params.get('cls_logits'), loc_params.get('loc_map'), loc_params.get('img_path'), \
-        loc_params.get('label_in'), loc_params.get('gt_boxes'), loc_params.get('input_loc_img'), loc_params.get('idx'), \
-        loc_params.get('show_idxs'), loc_params.get('sc_maps_fo'), loc_params.get('sc_maps_so')
-    pred_sos = loc_params.get('pred_sos') if 'sos' in args.mode else None
-    # cls_logits: 20 * 200
+    """ evaluate all metrics using different methods.
+    @ Author: Kevin
+    :param args: evaluation arguments
+    :param loc_params: # cls_logits: 20 * 200
     # loc_map: 20 * 200 * 14 * 14
     # input_loc_img: 20 * 200 * 224 * 224
     # idx: start from 0
     # sc_maps_fo = [none, none, [20,196,196], [20,196,196]]
     # sc_maps_so = [none, none, [20,196,196], [20,196,196]]
     # pred_sos: 20 * 14 * 14
+    :return: loc_err, time_list
+    """
+    loc_err, cls_logits, loc_map, img_path, label_in, gt_boxes, input_loc_img, idx, show_idxs, sc_maps_fo, sc_maps_so = \
+        loc_params.get('loc_err'), loc_params.get('cls_logits'), loc_params.get('loc_map'), loc_params.get('img_path'), \
+        loc_params.get('label_in'), loc_params.get('gt_boxes'), loc_params.get('input_loc_img'), loc_params.get('idx'), \
+        loc_params.get('show_idxs'), loc_params.get('sc_maps_fo'), loc_params.get('sc_maps_so')
+    pred_sos = loc_params.get('pred_sos') if 'sos' in args.mode else None
+
     time_list = {}
     for th in args.threshold:
         cam_start_time = time.time()
@@ -396,11 +393,8 @@ def eval_loc_all(args, loc_params):
         loc_err['top1_locerr_other_{}'.format(th)].update(region_wrong, input_loc_img.size()[0])
 
         # Visualization
-        detail_cam = {'cls_wrong': cls_wrong, 'multi_instances': multi_instances,
-                  'region_part': region_part, 'region_more': region_more,
-                  'region_wrong': region_wrong}
         debug_vis_loc(args, idx, show_idxs, img_path, top_maps, top5_boxes, label_in.data.long().numpy(),
-                      gt_boxes, detail_cam, suffix='cam')
+                      gt_boxes, suffix='cam')
 
         # SCG
         scg_start_time = time.time()
@@ -409,7 +403,7 @@ def eval_loc_all(args, loc_params):
             for sc_map_fo_i, sc_map_so_i in zip(sc_maps_fo, sc_maps_so):
                 if (sc_map_fo_i is not None) and (sc_map_so_i is not None):
                     sc_map_so_i = sc_map_so_i.to(args.device)
-                    sc_map_i = torch.max(sc_map_fo_i, args.scg_so_weight * sc_map_so_i)
+                    sc_map_i = torch.max(sc_map_fo_i, sc_map_so_i)
                     sc_map_i = sc_map_i / (torch.sum(sc_map_i, dim=1, keepdim=True) + 1e-10)
                     sc_maps.append(sc_map_i)
         elif args.scg_fo:
@@ -426,8 +420,6 @@ def eval_loc_all(args, loc_params):
         else:
             raise Exception("[Error] HSC must be calculated by 4 or 5 stage feature of backbone.")
 
-        locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
-            None, None, None, None, None, None,
         if args.scg_version == 'v1':
             locerr_1_scg, locerr_5_scg, gt_known_locerr_scg, top_maps_scg, top5_boxes_scg, top1_wrong_detail_scg = \
                 eval_loc_scg(cls_logits, top_maps, gt_known_maps, sc_com, label_in,
@@ -458,29 +450,24 @@ def eval_loc_all(args, loc_params):
         loc_err['top1_locerr_scg_more_wrong_{}'.format(th)].update(region_more_scg, input_loc_img.size()[0])
         loc_err['top1_locerr_scg_other_{}'.format(th)].update(region_wrong_scg, input_loc_img.size()[0])
 
-        # Visualization
-        detail_scg = {'cls_wrong': cls_wrong_scg, 'multi_instances': multi_instances_scg,
-                      'region_part': region_part_scg, 'region_more': region_more_scg,
-                      'region_wrong': region_wrong_scg}
-
-        # if args.scg_blocks == '4,5':
-        #     sc_maps_fo_fuse = sc_maps_fo[-2] + sc_maps_fo[-1]  # add fo from stage 4 and 5
-        #     sc_maps_so_fuse = sc_maps_so[-2] + sc_maps_so[-1]  # add so from stage 4 and 5
-        #     suffix_sc = ['fo_45', 'so_45', 'com45']
-        # elif args.scg_blocks == '4':
-        #     sc_maps_fo_fuse = sc_maps_fo[-2]
-        #     sc_maps_so_fuse = sc_maps_so[-2]
-        #     suffix_sc = ['fo_4', 'so_4', 'com4']
-        # elif args.scg_blocks == '5':
-        #     sc_maps_fo_fuse = sc_maps_fo[-1]
-        #     sc_maps_so_fuse = sc_maps_so[-1]
-        #     suffix_sc = ['fo_5', 'so_5', 'com5']
-        # else:
-        #     raise Exception("[Error] HSC must be calculated by 4 or 5 stage feature of backbone.")
+        if args.scg_blocks == '4,5':
+            sc_maps_fo_fuse = sc_maps_fo[-2] + sc_maps_fo[-1]  # add fo from stage 4 and 5
+            sc_maps_so_fuse = sc_maps_so[-2] + sc_maps_so[-1]  # add so from stage 4 and 5
+            suffix_sc = ['fo_45', 'so_45', 'com45']
+        elif args.scg_blocks == '4':
+            sc_maps_fo_fuse = sc_maps_fo[-2]
+            sc_maps_so_fuse = sc_maps_so[-2]
+            suffix_sc = ['fo_4', 'so_4', 'com4']
+        elif args.scg_blocks == '5':
+            sc_maps_fo_fuse = sc_maps_fo[-1]
+            sc_maps_so_fuse = sc_maps_so[-1]
+            suffix_sc = ['fo_5', 'so_5', 'com5']
+        else:
+            raise Exception("[Error] HSC must be calculated by 4 or 5 stage feature of backbone.")
 
         # Visualization for localization map and self-correlation map.
-        debug_vis_loc(args, idx, show_idxs, img_path, top_maps_scg, top5_boxes_scg, label_in.data.long().numpy(), gt_boxes, detail_scg, suffix='scg')
-        # debug_vis_sc(args, idx, show_idxs, img_path, sc_maps_fo_fuse, sc_maps_so_fuse, sc_com, label_in.data.long().numpy(), detail_scg, suffix=suffix_sc)
+        debug_vis_loc(args, idx, show_idxs, img_path, top_maps_scg, top5_boxes_scg, label_in.data.long().numpy(), gt_boxes, suffix='scg')
+        debug_vis_sc(args, idx, show_idxs, img_path, sc_maps_fo_fuse, sc_maps_so_fuse, sc_com, label_in.data.long().numpy(), suffix=suffix_sc)
 
         # SOS localization
         if 'sos' in args.mode:
@@ -507,16 +494,12 @@ def eval_loc_all(args, loc_params):
             loc_err['top1_locerr_other_sos_{}'.format(th)].update(region_wrong_sos, input_loc_img.size()[0])
 
             # Visualization
-            detail_sos = {'cls_wrong': cls_wrong_sos, 'multi_instances': multi_instances_sos,
-                          'region_part': region_part_sos, 'region_more': region_more_sos,
-                          'region_wrong': region_wrong_sos}
-
             debug_vis_loc(args, idx, show_idxs, img_path, top_sos_maps, top5_sos_boxes, label_in.data.long().numpy(),
-                          gt_boxes, detail_sos, suffix='sos')
+                          gt_boxes, suffix='sos')
 
     base_num = (args.debug_num // args.batch_size) if (args.debug_num % args.batch_size) == 0 \
         else (args.debug_num // args.batch_size) + 1
-    if args.debug_only and idx >= base_num:
+    if args.debug_only == 'True' and idx >= base_num:
         print("Debug-Only Mode: Mission Complete.")
         sys.exit(0)
 

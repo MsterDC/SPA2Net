@@ -1,5 +1,6 @@
 import torch.optim as optim
 import numpy as np
+from collections.abc import Iterable
 
 
 def get_finetune_optimizer(args, model):
@@ -85,32 +86,6 @@ def reduce_lr(args, optimizer, epoch, factor=0.1, decay_params=None):
         return False
 
 
-def increase_lr(args, optimizer, epoch, factor=10, increase_params=None):
-    if increase_params is not None:
-        increase_params = increase_params.strip().split(',')
-    points = args.increase_points.strip().split(',')
-    try:
-        change_points = map(lambda x: int(x.strip()), points)
-    except ValueError:
-        change_points = None
-    if change_points is not None and epoch in change_points:
-        if increase_params is not None:
-            for idx in increase_params:
-                if idx == 'all':
-                    for g in optimizer.param_groups:
-                        g['lr'] = g['lr'] * factor
-                    return True
-                else:
-                    index = int(idx)
-                    optimizer.param_groups[index]['lr'] = optimizer.param_groups[index]['lr'] * factor
-        else:
-            for g in optimizer.param_groups:
-                g['lr'] = g['lr'] * factor
-        return True
-    else:
-        return False
-
-
 def adjust_lr(args, optimizer, epoch):
     if 'cifar' in args.dataset:
         change_points = [80, 120, 160]
@@ -132,3 +107,41 @@ def adjust_lr(args, optimizer, epoch):
 
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
+
+
+def set_freeze_by_names(model, layer_names, freeze=True):
+    if not isinstance(layer_names, Iterable):
+        layer_names = [layer_names]
+    for name, child in model.named_children():
+        if name not in layer_names:
+            continue
+        for param in child.parameters():
+            param.requires_grad = not freeze
+    pass
+
+def freeze_by_names(model, layer_names):
+    set_freeze_by_names(model, layer_names, True)
+
+
+def unfreeze_by_names(model, layer_names):
+    set_freeze_by_names(model, layer_names, False)
+
+
+def set_freeze_by_idxs(model, idxs, freeze=True):
+    if not isinstance(idxs, Iterable):
+        idxs = [idxs]
+    num_child = len(list(model.children()))
+    idxs = tuple(map(lambda idx: num_child + idx if idx < 0 else idx, idxs))
+    for idx, child in enumerate(model.children()):
+        if idx not in idxs:
+            continue
+        for param in child.parameters():
+            param.requires_grad = not freeze
+
+
+def freeze_by_idxs(model, idxs):
+    set_freeze_by_idxs(model, idxs, True)
+
+
+def unfreeze_by_idxs(model, idxs):
+    set_freeze_by_idxs(model, idxs, False)
