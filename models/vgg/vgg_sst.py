@@ -33,17 +33,9 @@ class VGG(nn.Module):
         self.conv3 = nn.Sequential(*features[cnvs[0]:cnvs[1]])
         self.conv4 = nn.Sequential(*features[cnvs[1]:cnvs[2]])
         self.conv5 = nn.Sequential(*features[cnvs[2]:-1])
-        self.num_classes = num_classes
-        # self.normalize = NormalizationFamily()
-        self.args = args
 
-        # test for adding another cls_head for de-noising
-        # self.denoise = nn.Sequential(
-        #     nn.Conv2d(512, 1024, kernel_size=3, padding=1, dilation=1),  # fc6
-        #     nn.ReLU(True),
-        #     nn.Conv2d(1024, 1024, kernel_size=3, padding=1, dilation=1),  # fc7
-        #     nn.ReLU(True),
-        #     nn.Conv2d(1024, self.num_classes, kernel_size=1, padding=0))
+        self.num_classes = num_classes
+        self.args = args
 
         self.cls = nn.Sequential(
             nn.Conv2d(512, 1024, kernel_size=3, padding=1, dilation=1),  # fc6
@@ -54,7 +46,7 @@ class VGG(nn.Module):
 
         if 'sa' in self.args.mode:
             self.sa = ScaledDotProductAttention(d_model=int(args.sa_neu_num), d_k=int(args.sa_neu_num),
-                                                d_v=int(args.sa_neu_num), h=int(args.sa_head), weight=args.sa_edge_weight)
+                                                d_v=int(args.sa_neu_num), h=int(args.sa_head))
 
         if 'sos' in self.args.mode:
             self.sos = nn.Sequential(
@@ -112,7 +104,7 @@ class VGG(nn.Module):
             for sc_map_fo_i, sc_map_so_i in zip(sc_maps_fo, sc_maps_so):
                 if (sc_map_fo_i is not None) and (sc_map_so_i is not None):
                     sc_map_so_i = sc_map_so_i.to(self.args.device)
-                    sc_map_i = torch.max(sc_map_fo_i, self.args.scg_so_weight * sc_map_so_i)
+                    sc_map_i = torch.max(sc_map_fo_i, sc_map_so_i)
                     sc_map_i = sc_map_i / (torch.sum(sc_map_i, dim=1, keepdim=True) + 1e-10)
                     sc_maps.append(sc_map_i)
 
@@ -201,11 +193,6 @@ class VGG(nn.Module):
     def get_cls_loss(self, logits, label):
         return self.ce_loss(logits, label.long())
 
-    # test for denoising loss
-    # def get_denoise_loss(self, logits, label):
-    #     cls_logits = torch.mean(torch.mean(logits, dim=2), dim=2)
-    #     return self.ce_loss(cls_logits, label.long())
-
     def get_ra_loss(self, logits, label, th_bg=0.3, bg_fg_gap=0.0):
         n, _, _, _ = logits.size()
         cls_logits = F.softmax(logits, dim=1)
@@ -238,7 +225,7 @@ class VGG(nn.Module):
             sos_loss = torch.zeros_like(loss)
         if self.args.ram and epoch >= self.args.ram_start:
             ra_loss = self.get_ra_loss(logits, label, self.args.ram_th_bg, self.args.ram_bg_fg_gap)
-            loss += self.args.ra_loss_weight * ra_loss
+            loss += self.args.ram_loss_weight * ra_loss
         else:
             ra_loss = torch.zeros_like(loss)
         return loss, cls_loss, ra_loss, sos_loss
@@ -246,7 +233,7 @@ class VGG(nn.Module):
     def cal_sc(self, feat):
         F1_2, F3, F4, F5 = feat
         sc_fo_2, sc_so_2, sc_fo_3, sc_so_3, sc_fo_4, sc_so_4, sc_fo_5, sc_so_5 = [None] * 8
-        fo_th, so_th, order, stage = self.args.scg_fosc_th, self.args.scg_sosc_th, self.args.scg_order, self.args.scg_blocks
+        fo_th, so_th, order, stage = self.args.scg_fosc_th, self.args.scg_sosc_th, 2, self.args.scg_blocks
         if '2' in stage:
             fo_2, so_2 = self.hsc(F1_2, fo_th, so_th, order)
             sc_fo_2 = fo_2.clone().detach()
@@ -268,7 +255,7 @@ class VGG(nn.Module):
     def cal_edge(self, feat_45):
         s_fo_th = self.args.scg_fosc_th
         s_so_th = self.args.scg_sosc_th
-        s_order = self.args.scg_order
+        s_order = 2
         ff4, ff5 = feat_45
         _mixed_edges = 0
         e_codes = []
@@ -293,32 +280,6 @@ class VGG(nn.Module):
             sc_fo, sc_so = self.cal_sc(feat)
         return cls_map, sc_fo, sc_so  # 训练时sc_fo和sc_so=None
 
-    # def _forward_spa_sa(self, train_flag, current_epoch, feat):
-    #     f12, f3, f4, f5 = feat
-    #     batch, channel, _, _ = f5.shape
-    #     sc_fo, sc_so = None, None
-    #     denoise_map = None
-    #     if train_flag:
-    #         # add denoise cls loss
-    #         denoise_map = self.denoise(f5)
-    #         if current_epoch >= self.args.sa_start:
-    #             sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
-    #             ho_self_corr = None
-    #             if self.args.sa_use_edge == 'True':
-    #                 ho_self_corr = self.cal_edge((f4, f5))
-    #             cls_in = self.sa(sa_in, sa_in, sa_in, ho_self_corr)
-    #         else:
-    #             cls_in = f5
-    #     else:
-    #         sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
-    #         sc_fo, sc_so = self.cal_sc(feat)
-    #         edge_code = None
-    #         if self.args.sa_use_edge == 'True':
-    #             edge_code = self.cal_edge((f4, f5))
-    #         cls_in = self.sa(sa_in, sa_in, sa_in, edge_code)
-    #     cls_map = self.cls(cls_in)
-    #     return denoise_map, cls_map, sc_fo, sc_so
-
     def _forward_spa_sa(self, train_flag, current_epoch, feat):
         f12, f3, f4, f5 = feat
         batch, channel, _, _ = f5.shape
@@ -341,47 +302,6 @@ class VGG(nn.Module):
             cls_in = self.sa(sa_in, sa_in, sa_in, edge_code)
         cls_map = self.cls(cls_in)
         return cls_map, sc_fo, sc_so
-
-    def _forward_sos_sa_v1(self, train_flag, current_epoch, feat):
-        """
-        sa module at cls branch.
-        """
-        pass
-
-    def _forward_sos_sa_v2(self, train_flag, current_epoch, feat):
-        """
-        sa module at sos branch.
-        """
-        f12, f3, f4, f5 = feat
-        cls_map = self.cls(f5)
-        batch, channel, _, _ = f5.shape
-        sc_fo, sc_so = self.cal_sc(feat)
-        sos_map = None
-        if train_flag:  # train
-            try:
-                assert self.args.sos_start <= self.args.sa_start
-            except:
-                raise Exception("[Error] sos start must before sa start! ")
-            if self.args.sos_start <= current_epoch:
-                if self.args.sa_start <= current_epoch:
-                    edge_code = None
-                    if self.args.sa_use_edge == 'True':
-                        edge_code = self.cal_edge((f4, f5))
-                    sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
-                    sos_in = self.sa(sa_in, sa_in, sa_in, edge_code)
-                else:
-                    sos_in = f5
-                sos_map = self.sos(sos_in)
-                sos_map = sos_map.squeeze()
-        else:  # test
-            edge_code = None
-            if self.args.sa_use_edge == 'True':
-                edge_code = self.cal_edge((f4, f5))
-            sa_in = f5.view(batch, channel, -1).permute(0, 2, 1)
-            sos_in = self.sa(sa_in, sa_in, sa_in, edge_code)
-            sos_map = self.sos(sos_in)
-            sos_map = sos_map.squeeze()
-        return cls_map, sos_map, sc_fo, sc_so
 
     def _forward_sos_sa_v3(self, train_flag, current_epoch, feat):
         """
@@ -572,12 +492,12 @@ def model(pretrained=False, **kwargs):
         model.load_state_dict(model_dict)
     return model
 
-def load_finetune(pretrained=True, **kwargs):
+def load_finetune(finetuned=True, **kwargs):
     # construct model
     layers = make_layers(cfg['O'], dilation=dilation['D1'])
     cnv = np.cumsum(cnvs['O'])
     model = VGG(layers, cnvs=cnv, **kwargs)
-    if pretrained:
+    if finetuned:
         pre2local_keymap = [('features.{}.weight'.format(i), 'conv1_2.{}.weight'.format(i)) for i in range(10)]
         pre2local_keymap += [('features.{}.bias'.format(i), 'conv1_2.{}.bias'.format(i)) for i in range(10)]
         pre2local_keymap += [('features.{}.weight'.format(i + 10), 'conv3.{}.weight'.format(i)) for i in range(7)]
@@ -589,34 +509,34 @@ def load_finetune(pretrained=True, **kwargs):
         pre2local_keymap = dict(pre2local_keymap)
 
         model_dict = model.state_dict()
-        pretrained_file = os.path.join(kwargs['args'].pretrained_model_dir, kwargs['args'].pretrained_model)
-        if os.path.isfile(pretrained_file):
+        finetuned_file = os.path.join(kwargs['args'].finetuned_model_dir, kwargs['args'].finetuned_model)
+        if os.path.isfile(finetuned_file):
             try:
-                pretrained_dict = torch.load(pretrained_file)
-                if 'state_dict' in pretrained_dict.keys():
-                    pretrained_dict = remove_prefix(pretrained_dict['state_dict'], 'module.')
+                finetuned_dict = torch.load(finetuned_file)
+                if 'state_dict' in finetuned_dict.keys():
+                    finetuned_dict = remove_prefix(finetuned_dict['state_dict'], 'module.')
                 else:
-                    pretrained_dict = remove_prefix(pretrained_dict, 'module.')
-                print('load fine-tuned model from {}'.format(pretrained_file))
+                    finetuned_dict = remove_prefix(finetuned_dict, 'module.')
+                print('load fine-tuned model from {}'.format(finetuned_file))
             except KeyError:
                 print("Loading fine-tuned model failed.")
         else:
             raise Exception('[Error] Fine-tuned model does not exist, please check.')
         # 0. replace the key
-        pretrained_dict = {pre2local_keymap[k] if k in pre2local_keymap.keys() else k: v for k, v in
-                           pretrained_dict.items()}
+        finetuned_dict = {pre2local_keymap[k] if k in pre2local_keymap.keys() else k: v for k, v in
+                           finetuned_dict.items()}
         # *. show the loading information
-        for k in pretrained_dict.keys():
+        for k in finetuned_dict.keys():
             if k not in model_dict:
                 print('Key {} is removed from fine-tuned model.'.format(k))
         print(' ')
         for k in model_dict.keys():
-            if k not in pretrained_dict:
+            if k not in finetuned_dict:
                 print('Key {} is new added for SPA-Net.'.format(k))
         # 1. filter out unnecessary keys
-        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+        finetuned_dict = {k: v for k, v in finetuned_dict.items() if k in model_dict}
         # 2. overwrite entries in the existing state dict
-        model_dict.update(pretrained_dict)
+        model_dict.update(finetuned_dict)
         # 3. load the new state dict
         model.load_state_dict(model_dict)
         return model
