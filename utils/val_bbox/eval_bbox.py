@@ -132,7 +132,7 @@ def parse_scm(args, sc_maps_fo, sc_maps_so):
         for sc_map_fo_i, sc_map_so_i in zip(sc_maps_fo, sc_maps_so):
             if (sc_map_fo_i is not None) and (sc_map_so_i is not None):
                 sc_map_so_i = sc_map_so_i.to(args.device)
-                sc_map_i = torch.max(sc_map_fo_i, args.scg_so_weight * sc_map_so_i)
+                sc_map_i = torch.max(sc_map_fo_i, sc_map_so_i)
                 sc_map_i = sc_map_i / (torch.sum(sc_map_i, dim=1, keepdim=True) + 1e-10)
                 sc_maps.append(sc_map_i)
     elif args.scg_fo:
@@ -240,28 +240,25 @@ class opts(object):
         self.parser.add_argument("--scg_sosc_th", type=float, default=1)
         self.parser.add_argument("--scgv1_bg_th", type=float, default=0.05)
         self.parser.add_argument("--scgv1_fg_th", type=float, default=0.05)
-        self.parser.add_argument("--scg_order", type=int, default=2, help='the order of similarity of HSC.')
-        self.parser.add_argument("--scg_so_weight", type=float, default=1)
 
         self.parser.add_argument("--snapshot_dir", type=str, default='../snapshots')
         self.parser.add_argument("--save_dir", type=str, default='../evalbox', help='save results.')
         self.parser.add_argument("--batch_size", type=int, default=1)
         self.parser.add_argument("--gpus", type=str, default='0', help='-1 for cpu, split gpu id by comma')
-        self.parser.add_argument("--threshold", type=str, default='', help='value range of threshold')
+        self.parser.add_argument("--threshold", type=str, help='value range of threshold')
 
         self.parser.add_argument("--sos_seg_method", type=str, default='TC', help='BC / TC')
         self.parser.add_argument("--sos_loss_method", type=str, default='BCE', help='BCE / MSE')
 
         self.parser.add_argument("--sa_use_edge", type=str, default='True', help='Add edge encoding or not')
-        self.parser.add_argument("--sa_edge_weight", type=float, default=1, help='weight for edge-encoding.')
         self.parser.add_argument("--sa_edge_stage", type=str, default='4,5', help='4 for feat4, etc.')
         self.parser.add_argument("--sa_head", type=float, default=8, help='number of SA heads')
-        self.parser.add_argument("--sa_neu_num", type=float, default=512, help='channel num')
+        self.parser.add_argument("--sa_neu_num", type=float, help='channel num')
 
-        self.parser.add_argument("--vis_bbox", action='store_true', help='')
+        self.parser.add_argument("--vis_bbox", action='store_true')
         self.parser.add_argument("--vis_bbox_num", type=int, default=10, help='sample number for visualization.')
-        self.parser.add_argument("--vis_attention", action='store_true', help='')
-        self.parser.add_argument("--statis_bbox", action='store_true', help='')
+        self.parser.add_argument("--vis_attention", action='store_true')
+        self.parser.add_argument("--statis_bbox", action='store_true')
 
         self.parser.add_argument("--mode", type=str, default='sos+sa_v3')
 
@@ -274,6 +271,8 @@ class opts(object):
         mode = ['spa', 'sos', 'spa+sa', 'sos+sa_v3']
         if opt.mode not in mode:
             raise Exception('[Error] Invalid training mode, please check.')
+        if 'sa' in opt.mode:
+            opt.sa_neu_num = 512 if 'vgg' in opt.arch else 768
         # sparse the thresholds
         opt.threshold = list(map(float, opt.threshold.split(',')))
         return opt
@@ -435,12 +434,7 @@ def val(args):
                 # print("Save attention map success!")
 
             if args.vis_bbox:
-                if 'sos' in args.mode and iou_sos < 0.8:
-                    continue
-                if args.mode == 'spa' and iou_cam > 0.7:
-                    continue
-                save_map_root = 'heatmap'
-                heatmap_save_dir = os.path.join(args.save_dir, save_map_root)
+                heatmap_save_dir = os.path.join(args.save_dir, 'heatmap')
                 if not os.path.exists(heatmap_save_dir):
                     os.makedirs(heatmap_save_dir)
                 heatmap_save_path = os.path.join(heatmap_save_dir, img_id+'_htmap.png')

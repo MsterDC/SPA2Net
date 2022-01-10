@@ -1,18 +1,17 @@
 #!/bin/sh
 
 arch="inceptionv3_sst"
-sa_neu_num=768
 restore_from="cub_epoch_100.pth.tar"
 snapshot_dir="../../snapshots/inceptionv3_cls_#1"
 save_dir="../../evalbox/inceptionv3_cls_#1"
-batch_size=3
+gpus="1"
+batch_size=15
 threshold="0.15,0.15"
 scg_fosc_th=0.2
 scg_sosc_th=1
 sa_head=8
-gpus="3"
 mode="spa"
-vis_bbox_num=300
+vis_bbox_num=1000
 
 python eval_bbox.py \
     --arch=${arch} \
