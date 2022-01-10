@@ -7,7 +7,7 @@ from torch.nn import init
 
 class ScaledDotProductAttention(nn.Module):
 
-    def __init__(self, d_model, d_k, d_v, h, weight=1, dropout=.1):
+    def __init__(self, d_model, d_k, d_v, h, dropout=.1):
         """
         :param d_model: Output dimensionality of the model
         :param d_k: Dimensionality of queries and keys
@@ -25,7 +25,6 @@ class ScaledDotProductAttention(nn.Module):
         self.d_k = d_k
         self.d_v = d_v
         self.h = h
-        self.edge_weight = weight
         self.attention_map = None
         self.enhanced_map = None
 
@@ -58,16 +57,16 @@ class ScaledDotProductAttention(nn.Module):
 
         if self_corr is not None:
             self_corr = self_corr.view(bt_sz, -1, nq, nk)
-            
-            enhanced_weight = att_qk + self.edge_weight * self_corr
+
+            enhanced_weight = att_qk + self_corr
             self.enhanced_map = enhanced_weight
             soft_en_map = torch.softmax(enhanced_weight, -1)
             drop_en_map = self.dropout(soft_en_map)
 
-#             soft_en_map = torch.softmax(att_qk, -1)
-#             enhanced_weight = soft_en_map + self.edge_weight * self_corr
-#             self.enhanced_map = enhanced_weight
-#             drop_en_map = self.dropout(enhanced_weight)
+            # soft_en_map = torch.softmax(att_qk, -1)
+            # enhanced_weight = soft_en_map + self.edge_weight * self_corr
+            # self.enhanced_map = enhanced_weight
+            # drop_en_map = self.dropout(enhanced_weight)
 
             att_qkv = torch.matmul(drop_en_map, v).permute(0, 2, 1, 3).contiguous().view(bt_sz, nq, self.h * self.d_v)  # (b_s, nq, h*d_v)
         else:
