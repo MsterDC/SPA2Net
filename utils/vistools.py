@@ -4,56 +4,34 @@ import os
 import torch
 
 
-def debug_vis_loc(args, idx, show_idxs, img_path, top_maps, top5_boxes, label, gt_boxes, detail, suffix='cam'):
+def debug_vis_loc(args, idx, show_idxs, img_path, top_maps, top5_boxes, label, gt_boxes, suffix='cam'):
     if not args.debug:
         return
-    cls_wrong = detail.get('cls_wrong')
-    multi_instances = detail.get('multi_instances')
-    region_part = detail.get('region_part')
-    region_more = detail.get('region_more')
-    region_wrong = detail.get('region_wrong')
 
     base_num = (args.debug_num // args.batch_size) if (args.debug_num % args.batch_size) == 0 \
         else  (args.debug_num // args.batch_size) + 1
     for vis_n in range(base_num):
         if idx == vis_n:
-            top1_wrong_detail_dir = 'cls_{}-mins_{}-rpart_{}-rmore_{}-rwrong_{}_scg'.format(cls_wrong,
-                                                                                            multi_instances,
-                                                                                            region_part,
-                                                                                            region_more,
-                                                                                            region_wrong)
-            debug_dir = os.path.join(args.debug_dir, top1_wrong_detail_dir) if args.debug_detail else args.debug_dir
             for show_id in show_idxs:
-                save_im_heatmap_box(img_path[show_id], top_maps[show_id], top5_boxes[show_id], debug_dir,
+                save_im_heatmap_box(img_path[show_id], top_maps[show_id], top5_boxes[show_id], args.debug_dir,
                                     gt_label=label[show_id], gt_box=gt_boxes[show_id],
                                     epoch=args.current_epoch, threshold=args.threshold[0], suffix=suffix)
                 pass
         pass
 
 
-def debug_vis_sc(args, idx, show_idxs, img_path, sc_maps_fo_fuse, sc_maps_so_fuse, sc_maps_fuse, label, detail, suffix=None):
+def debug_vis_sc(args, idx, show_idxs, img_path, sc_maps_fo_fuse, sc_maps_so_fuse, sc_maps_fuse, label, suffix=None):
     if not args.debug:
         return
-    cls_wrong = detail.get('cls_wrong')
-    multi_instances = detail.get('multi_instances')
-    region_part = detail.get('region_part')
-    region_more = detail.get('region_more')
-    region_wrong = detail.get('region_wrong')
 
     base_num = (args.debug_num // args.batch_size) if (args.debug_num % args.batch_size) == 0 \
         else (args.debug_num // args.batch_size) + 1
     for vis_n in range(base_num):
         if idx == vis_n:
-            top1_wrong_detail_dir = 'cls_{}-mins_{}-rpart_{}-rmore_{}-rwrong_{}_scg'.format(cls_wrong,
-                                                                                            multi_instances,
-                                                                                            region_part,
-                                                                                            region_more,
-                                                                                            region_wrong)
-            debug_dir = os.path.join(args.debug_dir, top1_wrong_detail_dir) if args.debug_detail else args.debug_dir
             for show_id in show_idxs:
-                save_im_sim(img_path[show_id], sc_maps_fo_fuse[show_id], debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix=suffix[0])
-                save_im_sim(img_path[show_id], sc_maps_so_fuse[show_id], debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix=suffix[1])
-                save_im_sim(img_path[show_id], sc_maps_fuse[show_id], debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix=suffix[-1])
+                save_im_sim(img_path[show_id], sc_maps_fo_fuse[show_id], args.debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix=suffix[0])
+                save_im_sim(img_path[show_id], sc_maps_so_fuse[show_id], args.debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix=suffix[1])
+                save_im_sim(img_path[show_id], sc_maps_fuse[show_id], args.debug_dir, gt_label=label[show_id], epoch=args.current_epoch, suffix=suffix[-1])
         pass
 
 

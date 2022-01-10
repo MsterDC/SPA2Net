@@ -130,7 +130,7 @@ def save_scm(args, tras_img, aff_maps, img_path, epoch, suffix='scm45'):
     if args.scg_com:
         for sc_map_fo_i, sc_map_so_i in zip(aff_maps[0], aff_maps[1]):
             if (sc_map_fo_i is not None) and (sc_map_so_i is not None):
-                sc_map_i = torch.max(sc_map_fo_i, args.scg_so_weight * sc_map_so_i)
+                sc_map_i = torch.max(sc_map_fo_i, sc_map_so_i)
                 sc_map_i = sc_map_i / (torch.sum(sc_map_i, dim=1, keepdim=True) + 1e-10)
                 sc_maps.append(sc_map_i)
     aff_maps = sc_maps[-2] + sc_maps[-1]

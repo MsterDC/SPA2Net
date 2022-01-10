@@ -27,25 +27,11 @@ def restore(args, model, optimizer, istrain=True, including_opt=False):
                 args.global_counter = checkpoint['global_counter'] + 1
                 if including_opt:
                     optimizer.load_state_dict(checkpoint['optimizer'])
-            if 'module.SPG_A3_1b.0.weight' in checkpoint['state_dict']:
-                checkpoint['state_dict']['module.cls_fc6.0.weight'] = checkpoint['state_dict'][
-                    'module.SPG_A3_1b.0.weight']
-                checkpoint['state_dict']['module.cls_fc6.0.bias'] = checkpoint['state_dict']['module.SPG_A3_1b.0.bias']
-                checkpoint['state_dict']['module.cls_fc7.0.weight'] = checkpoint['state_dict'][
-                    'module.SPG_A3_2b.0.weight']
-                checkpoint['state_dict']['module.cls_fc7.0.bias'] = checkpoint['state_dict']['module.SPG_A3_2b.0.bias']
-                checkpoint['state_dict']['module.cls_fc8.weight'] = checkpoint['state_dict']['module.SPG_A4.weight']
-                checkpoint['state_dict']['module.cls_fc8.bias'] = checkpoint['state_dict']['module.SPG_A4.bias']
             model.load_state_dict(checkpoint['state_dict'])
             print("=> loaded checkpoint '{}' (epoch {})".format(snapshot, checkpoint['epoch']))
         except KeyError:
             print("KeyError")
-            if args.arch == 'vgg_v5_7' or args.arch == 'vgg_v7' or args.arch == 'vgg_v10':
-                _model_load_v6(model, checkpoint)
-            # elif args.arch=='vgg_v2':
-            #     _model_load_v2(model, checkpoint)
-            else:
-                _model_load(model, checkpoint)
+            _model_load(model, checkpoint)
         except KeyError:
             print("Loading pre-trained values failed.")
             raise
