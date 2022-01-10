@@ -54,36 +54,36 @@ def model(pretrained=False, **kwargs):
     return Inception3(**kwargs)
 
 
-def load_finetune(pretrained=True, **kwargs):
+def load_finetune(finetuned=True, **kwargs):
     # construct model
-    if pretrained:
+    if finetuned:
         model = Inception3(**kwargs)
         model_dict = model.state_dict()
-        pretrained_file = os.path.join(kwargs['args'].pretrained_model_dir, kwargs['args'].pretrained_model)
-        if os.path.isfile(pretrained_file):
+        finetuned_file = os.path.join(kwargs['args'].finetuned_model_dir, kwargs['args'].finetuned_model)
+        if os.path.isfile(finetuned_file):
             try:
-                pretrained_dict = torch.load(pretrained_file)
-                if 'state_dict' in pretrained_dict.keys():
-                    pretrained_dict = remove_prefix(pretrained_dict['state_dict'], 'module.')
+                finetuned_dict = torch.load(finetuned_file)
+                if 'state_dict' in finetuned_dict.keys():
+                    finetuned_dict = remove_prefix(finetuned_dict['state_dict'], 'module.')
                 else:
-                    pretrained_dict = remove_prefix(pretrained_dict, 'module.')
-                print('load fine-tuned model from {}'.format(pretrained_file))
+                    finetuned_dict = remove_prefix(finetuned_dict, 'module.')
+                print('load fine-tuned model from {}'.format(finetuned_file))
             except KeyError:
                 print("Loading fine-tuned model failed.")
         else:
             raise Exception('[Error] Fine-tuned model does not exist, please check.')
         # *. show the loading information
-        for k in pretrained_dict.keys():
+        for k in finetuned_dict.keys():
             if k not in model_dict:
                 print('Key {} is removed from fine-tuned model.'.format(k))
         print(' ')
         for k in model_dict.keys():
-            if k not in pretrained_dict:
+            if k not in finetuned_dict:
                 print('Key {} is new added for SPA-Net.'.format(k))
         # 1. filter out unnecessary keys
-        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+        finetuned_dict = {k: v for k, v in finetuned_dict.items() if k in model_dict}
         # 2. overwrite entries in the existing state dict
-        model_dict.update(pretrained_dict)
+        model_dict.update(finetuned_dict)
         # 3. load the new state dict
         model.load_state_dict(model_dict)
         return model
@@ -127,7 +127,7 @@ class Inception3(nn.Module):
 
         if 'sa' in self.args.mode:
             self.sa = ScaledDotProductAttention(d_model=int(args.sa_neu_num), d_k=int(args.sa_neu_num),
-                                                d_v=int(args.sa_neu_num), h=int(args.sa_head), weight=args.sa_edge_weight)
+                                                d_v=int(args.sa_neu_num), h=int(args.sa_head))
 
         if 'sos' in self.args.mode:
             self.sos = nn.Sequential(
@@ -185,7 +185,7 @@ class Inception3(nn.Module):
             for sc_map_fo_i, sc_map_so_i in zip(sc_maps_fo, sc_maps_so):
                 if (sc_map_fo_i is not None) and (sc_map_so_i is not None):
                     sc_map_so_i = sc_map_so_i.to(self.args.device)
-                    sc_map_i = torch.max(sc_map_fo_i, self.args.scg_so_weight * sc_map_so_i)
+                    sc_map_i = torch.max(sc_map_fo_i, sc_map_so_i)
                     sc_map_i = sc_map_i / (torch.sum(sc_map_i, dim=1, keepdim=True) + 1e-10)
                     sc_maps.append(sc_map_i)
 
@@ -303,7 +303,7 @@ class Inception3(nn.Module):
             sos_loss = torch.zeros_like(loss)
         if self.args.ram and epoch >= self.args.ram_start:
             ra_loss = self.get_ra_loss(logits, label, self.args.ram_th_bg, self.args.ram_bg_fg_gap)
-            loss += self.args.ra_loss_weight * ra_loss
+            loss += self.args.ram_loss_weight * ra_loss
         else:
             ra_loss = torch.zeros_like(loss)
         return loss, cls_loss, ra_loss, sos_loss
@@ -311,7 +311,7 @@ class Inception3(nn.Module):
     def cal_sc(self, feat):
         F1_2, F3, F4, F5 = feat
         sc_fo_2, sc_so_2, sc_fo_3, sc_so_3, sc_fo_4, sc_so_4, sc_fo_5, sc_so_5 = [None] * 8
-        fo_th, so_th, order, stage = self.args.scg_fosc_th, self.args.scg_sosc_th, self.args.scg_order, self.args.scg_blocks
+        fo_th, so_th, order, stage = self.args.scg_fosc_th, self.args.scg_sosc_th, 2, self.args.scg_blocks
         if '2' in stage:
             fo_2, so_2 = self.hsc(F1_2, fo_th, so_th, order)
             sc_fo_2 = fo_2.clone().detach()
@@ -333,7 +333,7 @@ class Inception3(nn.Module):
     def cal_edge(self, feat_45):
         s_fo_th = self.args.scg_fosc_th
         s_so_th = self.args.scg_sosc_th
-        s_order = self.args.scg_order
+        s_order = 2
         ff4, ff5 = feat_45
         _mixed_edges = 0
         e_codes = []
@@ -429,7 +429,7 @@ class Inception3(nn.Module):
         return cls_map, sos_map, sc_fo, sc_so
 
     def forward(self, x, train_flag=True, cur_epoch=500):
-
+        # backbone forward pass
         x = self.Conv2d_1a_3x3(x)  # 224 x 224 x 3
         x = self.Conv2d_2a_3x3(x)  # 112 x 112 x 32
         x = self.Conv2d_2b_3x3(x)  # 112 x 112 x 32
@@ -446,6 +446,7 @@ class Inception3(nn.Module):
         x = self.Mixed_6d(x)  # 28 x 28 x 768
         feat4 = self.Mixed_6e(x)  # 28 x 28 x 768
 
+        # forward for different methods
         ft_1_5 = (feat1, feat2, feat3, feat4)
         if self.args.mode == 'spa':
             return self._forward_spa(train_flag, ft_1_5)
