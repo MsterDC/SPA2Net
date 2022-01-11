@@ -463,6 +463,17 @@ def norm_atten_map(attention_map):
     return atten_norm
 
 
+def norm_for_batch_tensor(tensor_map):
+    b, w, h = tensor_map.shape
+    attention_map = tensor_map.reshape(b, -1)
+    min_val_batch, _ = torch.min(attention_map, dim=1)  # (n,)
+    expanded_min_batch = min_val_batch.unsqueeze(1).unsqueeze(1)
+    max_val_batch, _ = torch.max(attention_map, dim=1)
+    expanded_max_batch = max_val_batch.unsqueeze(1).unsqueeze(1)
+    atten_norm = (tensor_map - expanded_min_batch) / (expanded_max_batch - expanded_min_batch + 1e-10)  # (n,w,h)
+    return atten_norm
+
+
 def norm_for_batch_map(scm):
     b, w, h = scm.shape
     attention_map = scm.reshape(b, -1)  # (n，w*h)
