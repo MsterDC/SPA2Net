@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 
-from utils.vistools import norm_for_batch_map
+from utils.vistools import norm_for_batch_map, norm_for_batch_tensor
 from models.sa import ScaledDotProductAttention
 
 __all__ = ['Inception3', 'model']
@@ -172,12 +172,9 @@ class Inception3(nn.Module):
         return gt_scm
 
     def get_scm(self, logits, gt_label, sc_maps_fo, sc_maps_so):
-        # get cam
         loc_map = F.relu(logits)
-        cam_map = loc_map.data.cpu().numpy()
-        # gt_label: (n, )
-        cam_map_ = cam_map[torch.arange(cam_map.shape[0]), gt_label.data.cpu().numpy().astype(int), :, :]  # (bs, w, h)
-        cam_map_cls = norm_for_batch_map(cam_map_)  # (64,14,14)
+        cam_map_ = loc_map[torch.arange(loc_map.shape[0]), gt_label.data.cpu().numpy().astype(int), :, :]  # (bs, w, h)
+        cam_map_cls = norm_for_batch_tensor(cam_map_)
 
         # using fo/so and diff stage feature to get fused scm.
         sc_maps = []
@@ -199,15 +196,17 @@ class Inception3(nn.Module):
             raise Exception("[Error] HSC must be calculated by 4 or 5 stage feature of backbone.")
 
         # weighted sum for scm and cam
-        sc_map = sc_com.squeeze().data.cpu().numpy()  # (64,196,196)
+        sc_map = sc_com
         wh_sc, bz = sc_map.shape[1], sc_map.shape[0]
         h_sc, w_sc = int(np.sqrt(wh_sc)), int(np.sqrt(wh_sc))  # 14,14
         cam_map_seg = cam_map_cls.reshape(bz, 1, -1)  # (64,1,196)
-        cam_sc_dot = torch.bmm(torch.from_numpy(cam_map_seg), torch.from_numpy(sc_map))  # (64,1,196)
+        cam_sc_dot = torch.bmm(cam_map_seg, sc_map)  # (64,1,196)
         cam_sc_map = cam_sc_dot.reshape(bz, w_sc, h_sc)  # (64,14,14)
         sc_map_cls_i = torch.where(cam_sc_map >= 0, cam_sc_map, torch.zeros_like(cam_sc_map))
+
         sc_map_cls_i = (sc_map_cls_i - torch.min(sc_map_cls_i)) / (
                 torch.max(sc_map_cls_i) - torch.min(sc_map_cls_i) + 1e-10)
+
         gt_scm = torch.where(sc_map_cls_i > 0, sc_map_cls_i, torch.zeros_like(sc_map_cls_i))
         # segment fg/bg for scm or not.
         gt_scm = self.get_masked_pseudo_gt(gt_scm, self.args.sos_fg_th, self.args.sos_bg_th,
