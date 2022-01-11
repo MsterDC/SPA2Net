@@ -17,91 +17,6 @@ from utils.snapshot import save_cam, save_sos, save_scm
 from utils.restore import restore
 
 
-def train_save(args, current_epoch, total_epoch, global_counter, model, optimizer, losses, losses_cls, top1,
-               top5, writer, losses_ra, decay_flag, losses_so, losses_spa):
-    current_epoch += 1
-    if (current_epoch % 10 == 0 and args.dataset == 'cub') or (
-            args.dataset == 'ilsvrc') or current_epoch == total_epoch:
-        save_checkpoint(args,
-                        {'epoch': current_epoch,
-                         'arch': args.arch,
-                         'global_counter': global_counter,
-                         'state_dict': model.state_dict(),
-                         'optimizer': optimizer.state_dict()
-                         }, is_best=False,
-                        filename='%s_epoch_%d.pth.tar'
-                                 % (args.dataset, current_epoch))
-
-    # save training record
-    with open(os.path.join(args.snapshot_dir, 'train_record.csv'), 'a') as fw:
-        log_output = '{} \t {:.4f} \t {:.3f} \t {:.3f} \t {:.3f} \t'.format(current_epoch, losses.avg,
-                                                                            losses_cls.avg,
-                                                                            top1.avg, top5.avg)
-        writer.add_scalar('loss_epoch', losses.avg, current_epoch)
-        writer.add_scalar('cls_loss_epoch', losses_cls.avg, current_epoch)
-
-        if args.ram:
-            log_output += '{:.4f} \t'.format(losses_ra.avg)
-            writer.add_scalar('ram_loss', losses_ra.avg, current_epoch)
-            if args.dataset == 'cub':
-                if args.decay_points == 'none' and decay_flag is False and losses_ra.avg >= 0.30 and current_epoch >= 80:
-                    decay_flag = True
-                elif args.decay_points == 'none' and decay_flag is False and current_epoch >= 99:
-                    decay_flag = True
-            if args.dataset == 'ilsvrc':
-                pass
-
-        if 'sos' in args.mode:
-            log_output += '{:.4f} \t'.format(losses_so.avg)
-            writer.add_scalar('sos_loss', losses_so.avg, current_epoch)
-
-        if args.spa_loss == 'True':
-            log_output += '{:.4f} \t'.format(losses_spa.avg)
-            writer.add_scalar('spa_loss', losses_spa.avg, current_epoch)
-
-        log_output += '\n'
-        fw.write(log_output)
-        fw.close()
-    return current_epoch, writer, decay_flag
-
-
-def train_logger(args, global_counter, total_epoch, current_epoch, steps_per_epoch, idx, batch_time, train_loader,
-                 losses, losses_cls, top1, top5, losses_so, losses_ra, losses_spa, writer):
-    if global_counter % args.disp_interval == 0:
-        # Calculate ETA
-        eta_seconds = ((total_epoch - current_epoch) * steps_per_epoch +
-                       (steps_per_epoch - idx)) * batch_time.avg
-        eta_str = "{:0>8}".format(str(datetime.timedelta(seconds=int(eta_seconds))))
-        eta_seconds_epoch = steps_per_epoch * batch_time.avg
-        eta_str_epoch = "{:0>8}".format(str(datetime.timedelta(seconds=int(eta_seconds_epoch))))
-        log_output = 'Epoch: [{0}][{1}/{2}] \t ' \
-                     'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t ' \
-                     'ETA {eta_str}({eta_str_epoch})\t ' \
-                     'Loss {loss.val:.4f} ({loss.avg:.4f})\t ' \
-                     'Loss_cls {loss_cls.val:.4f} ({loss_cls.avg:.4f})\t ' \
-                     'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t ' \
-                     'Prec@5 {top5.val:.3f} ({top5.avg:.3f})\t'.format(current_epoch,
-                                                                       global_counter % len(train_loader),
-                                                                       len(train_loader), batch_time=batch_time,
-                                                                       eta_str=eta_str,
-                                                                       eta_str_epoch=eta_str_epoch, loss=losses,
-                                                                       loss_cls=losses_cls,
-                                                                       top1=top1, top5=top5)
-
-        if 'sos' in args.mode:
-            log_output += 'Loss_so {loss_so.val:.4f} ({loss_so.avg:.4f})\t'.format(loss_so=losses_so)
-
-        if args.ram:
-            log_output += 'Loss_ra {loss_ra.val:.4f} ({loss_ra.avg:.4f})\t'.format(loss_ra=losses_ra)
-
-        if args.spa_loss == 'True':
-            log_output += 'Loss_spa {loss_spa.val:.4f} ({loss_spa.avg:.4f})\t'.format(loss_spa=losses_spa)
-
-        print(log_output)
-        writer.add_scalar('top1', top1.avg, global_counter)
-        writer.add_scalar('top5', top5.avg, global_counter)
-
-
 def train(args):
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpus_str
 
@@ -296,13 +211,39 @@ def train(args):
 
             end = time.time()
 
-            train_logger(args, global_counter,
-                         total_epoch, current_epoch,
-                         steps_per_epoch, idx,
-                         batch_time, train_loader,
-                         losses, losses_cls, top1,
-                         top5, losses_so, losses_ra,
-                         losses_spa, writer)
+            if global_counter % args.disp_interval == 0:
+                # Calculate ETA
+                eta_seconds = ((total_epoch - current_epoch) * steps_per_epoch +
+                               (steps_per_epoch - idx)) * batch_time.avg
+                eta_str = "{:0>8}".format(str(datetime.timedelta(seconds=int(eta_seconds))))
+                eta_seconds_epoch = steps_per_epoch * batch_time.avg
+                eta_str_epoch = "{:0>8}".format(str(datetime.timedelta(seconds=int(eta_seconds_epoch))))
+                log_output = 'Epoch: [{0}][{1}/{2}] \t ' \
+                             'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t ' \
+                             'ETA {eta_str}({eta_str_epoch})\t ' \
+                             'Loss {loss.val:.4f} ({loss.avg:.4f})\t ' \
+                             'Loss_cls {loss_cls.val:.4f} ({loss_cls.avg:.4f})\t ' \
+                             'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t ' \
+                             'Prec@5 {top5.val:.3f} ({top5.avg:.3f})\t'.format(current_epoch,
+                                                                               global_counter % len(train_loader),
+                                                                               len(train_loader), batch_time=batch_time,
+                                                                               eta_str=eta_str,
+                                                                               eta_str_epoch=eta_str_epoch, loss=losses,
+                                                                               loss_cls=losses_cls,
+                                                                               top1=top1, top5=top5)
+
+                if 'sos' in args.mode:
+                    log_output += 'Loss_so {loss_so.val:.4f} ({loss_so.avg:.4f})\t'.format(loss_so=losses_so)
+
+                if args.ram:
+                    log_output += 'Loss_ra {loss_ra.val:.4f} ({loss_ra.avg:.4f})\t'.format(loss_ra=losses_ra)
+
+                if args.spa_loss == 'True':
+                    log_output += 'Loss_spa {loss_spa.val:.4f} ({loss_spa.avg:.4f})\t'.format(loss_spa=losses_spa)
+
+                print(log_output)
+                writer.add_scalar('top1', top1.avg, global_counter)
+                writer.add_scalar('top5', top5.avg, global_counter)
 
             if args.watch_cam:
                 if args.dataset == 'cub':
@@ -334,9 +275,50 @@ def train(args):
                 save_sos(args, watch_trans_img, watch_gt, watch_img_path, current_epoch, suffix='gt_sos')
                 # save_scm(args, watch_trans_img, watch_scm, watch_img_path, current_epoch, suffix='sc_4+5')
 
-        current_epoch, writer, decay_flag = train_save(args, current_epoch, total_epoch, global_counter, model,
-                                                       optimizer, losses, losses_cls, top1, top5, writer, losses_ra,
-                                                       decay_flag, losses_so, losses_spa)
+        current_epoch += 1
+        if (current_epoch % 10 == 0 and args.dataset == 'cub') or (
+                args.dataset == 'ilsvrc') or current_epoch == total_epoch:
+            save_checkpoint(args,
+                            {'epoch': current_epoch,
+                             'arch': args.arch,
+                             'global_counter': global_counter,
+                             'state_dict': model.state_dict(),
+                             'optimizer': optimizer.state_dict()
+                             }, is_best=False,
+                            filename='%s_epoch_%d.pth.tar'
+                                     % (args.dataset, current_epoch))
+
+        # save training record
+        with open(os.path.join(args.snapshot_dir, 'train_record.csv'), 'a') as fw:
+            log_output = '{} \t {:.4f} \t {:.3f} \t {:.3f} \t {:.3f} \t'.format(current_epoch, losses.avg,
+                                                                                losses_cls.avg,
+                                                                                top1.avg, top5.avg)
+            writer.add_scalar('loss_epoch', losses.avg, current_epoch)
+            writer.add_scalar('cls_loss_epoch', losses_cls.avg, current_epoch)
+
+            if args.ram:
+                log_output += '{:.4f} \t'.format(losses_ra.avg)
+                writer.add_scalar('ram_loss', losses_ra.avg, current_epoch)
+                if args.dataset == 'cub':
+                    if args.decay_points == 'none' and decay_flag is False and losses_ra.avg >= 0.30 and current_epoch >= 80:
+                        decay_flag = True
+                    elif args.decay_points == 'none' and decay_flag is False and current_epoch >= 99:
+                        decay_flag = True
+                if args.dataset == 'ilsvrc':
+                    pass
+
+            if 'sos' in args.mode:
+                log_output += '{:.4f} \t'.format(losses_so.avg)
+                writer.add_scalar('sos_loss', losses_so.avg, current_epoch)
+
+            if args.spa_loss == 'True':
+                log_output += '{:.4f} \t'.format(losses_spa.avg)
+                writer.add_scalar('spa_loss', losses_spa.avg, current_epoch)
+
+            log_output += '\n'
+            fw.write(log_output)
+            fw.close()
+
         losses.reset()
         losses_cls.reset()
 
