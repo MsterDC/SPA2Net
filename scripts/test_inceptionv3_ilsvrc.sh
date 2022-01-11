@@ -11,15 +11,15 @@ python test_sst.py \
     --num_classes=1000 \
     --sa_head=8 \
     --scg_com \
-    --snapshot_dir=../snapshots/inceptionv3_sos+sa_v3_#14 \
-    --debug_dir=../debug/inceptionv3_sos+sa_v3_#14_test \
-    --threshold=0.15,0.25 \
-    --batch_size=3 \
+    --snapshot_dir=../snapshots/ilsvrc/inceptionv3_sos+sa_v3_#18 \
+    --debug_dir=../debug/ilsvrc/inceptionv3_sos+sa_v3_#18_t1 \
+    --threshold=0.05,0.8 \
+    --batch_size=4 \
     --gpus=0 \
-    --restore_from=cub_epoch_119.pth.tar \
+    --restore_from=ilsvrc_epoch_20.pth.tar \
     --scg_version=v2 \
-    --scg_fosc_th=0.2 \
-    --scg_sosc_th=1 \
+    --scg_fosc_th=0.4 \
+    --scg_sosc_th=2 \
     --sa_use_edge=True \
     --mask_save=False \
     --mask_path=../results \
@@ -27,4 +27,4 @@ python test_sst.py \
     --debug \
     --debug_num=10 \
     --debug_only=False \
-    --mode=spa+sa \
+    --mode=sos+sa_v3 \
