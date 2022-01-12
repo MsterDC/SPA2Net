@@ -33,7 +33,7 @@ class opts(object):
         self.parser.add_argument("--crop_size", type=int, default=224)
         self.parser.add_argument("--in_norm", type=str, default='True', help='normalize input or not')
         self.parser.add_argument("--num_workers", type=int, default=16)
-        self.parser.add_argument("--disp_interval", type=int, default=20)
+        self.parser.add_argument("--disp_interval", type=int, default=64)
         self.parser.add_argument("--tencrop", type=str, default='False')
         self.parser.add_argument("--onehot", type=str, default='False')
         self.parser.add_argument("--global_counter", type=int, default=0)
@@ -96,7 +96,7 @@ class opts(object):
         self.parser.add_argument("--ram_bg_fg_gap", type=float, help='gap between fg & bg in ram.')
 
         self.parser.add_argument("--spa_loss", type=str, default='False')
-        self.parser.add_argument("--spa_loss_start", type=int, help='spa loss start point.')
+        self.parser.add_argument("--spa_loss_start", type=int, default=3, help='spa loss start point.')
         self.parser.add_argument("--spa_loss_weight", type=float, default=0.001, help='loss weight for sparse loss.')
 
         self.parser.add_argument("--mode", type=str, default='sos+sa_v3', help='spa/sos/spa+sa/sos+sa_v3')
@@ -107,10 +107,21 @@ class opts(object):
         opt.gpus_str = opt.gpus
         opt.gpus = list(map(int, opt.gpus.split(',')))
         opt.gpus = [i for i in range(len(opt.gpus))] if opt.gpus[0] >= 0 else [-1]
+
+        # eval dataset
+        if opt.dataset not in ['cub', 'ilsvrc']:
+            raise Exception('Wrong dataset, please check.')
+        # eval decay points
+        if opt.decay_points == '':
+            raise Exception('Please specify the decayed points.')
+        if opt.decay_points == 'none' and opt.dataset != 'cub':
+            raise Exception('The decay points should not be none, please check..')
+        # eval pretrained model
         if 'vgg' in opt.arch:
             opt.pretrained_model = 'vgg16.pth'
         elif 'inception' in opt.arch:
             opt.pretrained_model = 'inception_v3_google.pth'
+        # eval freezed modules
         if opt.freeze == 'True':
             if 'vgg' in opt.arch:
                 opt.freeze_module = 'conv1_2,conv3,conv4,conv5'
@@ -119,11 +130,14 @@ class opts(object):
                                     'Mixed_5b,Mixed_5c,Mixed_5d,Mixed_6a,Mixed_6b,Mixed_6c,Mixed_6d,Mixed_6e'
             else:
                 raise Exception('Wrong freezed module gived.')
+        # eval self-attention channels
         if 'sa' in opt.mode:
             opt.sa_neu_num = 512 if 'vgg' in opt.arch else 768
+        # eval training modes
         support_mode = ['spa', 'sos', 'spa+sa', 'sos+sa_v3']
         if opt.mode not in support_mode:
             raise Exception('[Error] Invalid training mode, please check.')
+
         return opt
 
 
@@ -189,7 +203,7 @@ def get_model(args):
         params_id_list = ['cls_weight', 'cls_bias']
     else:
         op_params_list = [{'params': other_weight_list, 'lr': lr}, {'params': other_bias_list, 'lr': lr * 2},
-                      {'params': cls_weight_list, 'lr': cls_lr}, {'params': cls_bias_list, 'lr': cls_lr * 2}]
+                          {'params': cls_weight_list, 'lr': cls_lr}, {'params': cls_bias_list, 'lr': cls_lr * 2}]
         # set params' name list
         params_id_list = ['other_weight', 'other_bias', 'cls_weight', 'cls_bias']
 
@@ -204,7 +218,7 @@ def get_model(args):
         params_id_list.append('sa_weight'), params_id_list.append('sa_bias')
 
     model = torch.nn.DataParallel(model, args.gpus)
-    optimizer = optim.SGD(op_params_list, momentum = 0.9, weight_decay = 0.0005, nesterov = True)
+    optimizer = optim.SGD(op_params_list, momentum=0.9, weight_decay=0.0005, nesterov=True)
 
     return model, optimizer, params_id_list
 
@@ -262,16 +276,11 @@ def reproducibility_set(args):
 def log_init(args):
     batch_time = AverageMeter()
     losses = AverageMeter()
-    # test for denoising loss
-    # denoise_loss = AverageMeter()
     cls_loss = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
     return_params = [batch_time, losses, cls_loss, top1, top5]
-    # test for denoising loss
-    # return_params = [batch_time, losses, denoise_loss, cls_loss, top1, top5]
     log_head = '#epoch \t loss \t cls_loss \t pred@1 \t pred@5 \t'
-    # log_head = '#epoch \t loss \t denoise_loss \t cls_loss \t pred@1 \t pred@5 \t'
 
     losses_so = None
     losses_ra = None
@@ -332,6 +341,7 @@ def warmup_init(args, optimizer, op_params_list):
             warmup_message += 'warmup_params:' + str_p + '\n'
         with open(os.path.join(args.snapshot_dir, 'train_record.csv'), 'a') as fw:
             fw.write(warmup_message)
+            fw.close()
 
         return gra_scheduler
 
