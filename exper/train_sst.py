@@ -38,7 +38,7 @@ def train(args):
         os.makedirs(args.log_dir)
     writer = SummaryWriter(log_dir=args.log_dir)
 
-    # load log parameters
+    # init log parameters
     log_meters = log_init(args)
     batch_time, losses, losses_cls, top1, top5, losses_so, losses_ra, losses_spa, log_head = log_meters
     with open(os.path.join(args.snapshot_dir, 'train_record.csv'), 'a') as fw:
@@ -82,10 +82,9 @@ def train(args):
     # Specify the decay module
     decay_params = set_decay_modules(args.decay_module)
 
-    # set training mode
     model.train()
-    # load train loader
     train_loader = data_loader(args)
+    steps_per_epoch = len(train_loader)
 
     total_epoch = args.epoch
     current_epoch = args.current_epoch
@@ -100,9 +99,6 @@ def train(args):
     decay_count = 0
 
     while current_epoch < total_epoch:
-        steps_per_epoch = len(train_loader)
-        model.train()
-
         losses.reset()
         losses_cls.reset()
         top1.reset()
@@ -116,30 +112,32 @@ def train(args):
             losses_spa.reset()
 
         #  learning rate decay.
-        return_list = lr_decay(args, decay_params, decay_count, decay_flag, decay_once,
-                               optimizer, current_epoch, gra_scheduler)
-        if len(return_list) > 4:
-            total_epoch, optimizer, decay_count, decay_once, gra_scheduler = return_list
-        else:
-            optimizer, decay_count, decay_once, gra_scheduler = return_list
+        if (str(current_epoch) in args.decay_points) or args.decay_points == 'none':
+            return_list = lr_decay(args, decay_params, decay_count, decay_flag, decay_once,
+                                   optimizer, current_epoch, gra_scheduler)
+            if len(return_list) > 4:
+                total_epoch, optimizer, decay_count, decay_once, gra_scheduler = return_list
+            else:
+                optimizer, decay_count, decay_once, gra_scheduler = return_list
 
         with open(os.path.join(args.snapshot_dir, 'train_record.csv'), 'a') as fw:
             for p_name, g in zip(params_id_list, optimizer.param_groups):
                 print('Epoch:', current_epoch, p_name, ':', g['lr'])
                 out_str = 'Epoch:%d, %s, %f\n' % (current_epoch, p_name, g['lr'])
                 fw.write(out_str)
+            fw.close()
 
         save_flag = True  # 'save_cam' during training.
         watch_trans_img, watch_cam, watch_cls_logits, watch_img_path, \
         watch_label, watch_sos, watch_gt = [None] * 7
 
         for idx, dat in enumerate(train_loader):
-            # len(train_loader) = how many batchs in train_loader
             global_counter += 1
 
-            img_path, img, label = dat
-            input_img = img  # (bs, 3, h, w)
+            img_path, input_img, label = dat
             input_img, label = input_img.to(args.device), label.to(args.device)
+
+            b_s = input_img.size()[0]
 
             sc_maps_fo = None
             sc_maps_so = None
@@ -167,11 +165,14 @@ def train(args):
 
             loss_val, loss_cls, loss_ra, loss_so = model.module.get_loss(loss_params)
 
-            if args.spa_loss == 'True' and args.spa_loss_start <= current_epoch:
-                bs, _, _, _ = logits.size()
-                gt_map = logits[torch.arange(bs), label.long(), ...]
-                loss_spa = model.module.get_sparse_loss(gt_map)
-                loss_val += loss_spa
+            if args.spa_loss == 'True':
+                if args.spa_loss_start <= current_epoch:
+                    bs, _, _, _ = logits.size()
+                    gt_map = logits[torch.arange(bs), label.long(), ...]
+                    loss_spa = model.module.get_sparse_loss(gt_map)
+                    loss_val += loss_spa
+                else:
+                    loss_spa = torch.zeros_like(loss_val)
 
             # write into tensorboard
             writer.add_scalar('loss_val', loss_val, global_counter)
@@ -192,20 +193,20 @@ def train(args):
 
             if not args.onehot == 'True':
                 prec1, prec5 = evaluate.accuracy(cls_logits.data, label.long(), topk=(1, 5))
-                top1.update(prec1[0], input_img.size()[0])
-                top5.update(prec5[0], input_img.size()[0])
+                top1.update(prec1[0], b_s)
+                top5.update(prec5[0], b_s)
 
-            losses.update(loss_val.data, input_img.size()[0])
-            losses_cls.update(loss_cls.data, input_img.size()[0])
+            losses.update(loss_val.data, b_s)
+            losses_cls.update(loss_cls.data, b_s)
 
             if 'sos' in args.mode:
-                losses_so.update(loss_so.data, input_img.size()[0])
+                losses_so.update(loss_so.data, b_s)
 
             if args.ram:
-                losses_ra.update(loss_ra.data, input_img.size()[0])
+                losses_ra.update(loss_ra.data, b_s)
 
-            if args.spa_loss == 'True' and current_epoch >= args.spa_loss_start:
-                losses_spa.update(loss_spa.data, input_img.size()[0])
+            if args.spa_loss == 'True':
+                losses_spa.update(loss_spa.data, b_s)
 
             batch_time.update(time.time() - end)
 
@@ -251,19 +252,19 @@ def train(args):
                 elif args.dataset == 'ilsvrc':
                     want_im = 'n02488291_5176'
                 else:
-                    raise Exception('[Error] Invalid dataset!')
-                for idx, im in enumerate(img_path):
+                    raise
+                for t_x, im in enumerate(img_path):
                     if want_im in im and save_flag is True:
-                        watch_trans_img = input_img[idx]
-                        watch_cam = F.relu(logits)[idx]
-                        watch_cls_logits = cls_logits[idx]
+                        watch_trans_img = input_img[t_x]
+                        watch_cam = F.relu(logits)[t_x]
+                        watch_cls_logits = cls_logits[t_x]
                         watch_img_path = im
-                        watch_label = label.long()[idx]
+                        watch_label = label.long()[t_x]
                         if 'sos' in args.mode and current_epoch >= args.sos_start:
-                            watch_gt = [gt_scm[idx]]
-                            # watch_scm = [(sc_maps_fo[-2][idx], sc_maps_fo[-1][idx]),
-                            #              (sc_maps_so[-2][idx], sc_maps_so[-1][idx])]
-                            watch_sos = pred_sos[idx]
+                            watch_gt = [gt_scm[t_x]]
+                            # watch_scm = [(sc_maps_fo[-2][t_x], sc_maps_fo[-1][t_x]),
+                            #              (sc_maps_so[-2][t_x], sc_maps_so[-1][t_x])]
+                            watch_sos = pred_sos[t_x]
                             watch_sos = [torch.sigmoid(watch_sos)] if args.sos_loss_method == 'BCE' else [watch_sos]
                         save_flag = False
 
@@ -304,8 +305,7 @@ def train(args):
                         decay_flag = True
                     elif args.decay_points == 'none' and decay_flag is False and current_epoch >= 99:
                         decay_flag = True
-                if args.dataset == 'ilsvrc':
-                    pass
+                pass
 
             if 'sos' in args.mode:
                 log_output += '{:.4f} \t'.format(losses_so.avg)
