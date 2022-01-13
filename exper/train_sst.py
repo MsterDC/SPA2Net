@@ -250,7 +250,7 @@ def train(args):
                 if args.dataset == 'cub':
                     want_im = 'Scarlet_Tanager_0083_138500'
                 elif args.dataset == 'ilsvrc':
-                    want_im = 'n02488291_5176'
+                    want_im = 'n01440764_2574'
                 else:
                     raise
                 for t_x, im in enumerate(img_path):
@@ -277,6 +277,7 @@ def train(args):
                 # save_scm(args, watch_trans_img, watch_scm, watch_img_path, current_epoch, suffix='sc_4+5')
 
         current_epoch += 1
+
         if (current_epoch % 10 == 0 and args.dataset == 'cub') or (
                 args.dataset == 'ilsvrc') or current_epoch == total_epoch:
             save_checkpoint(args,
