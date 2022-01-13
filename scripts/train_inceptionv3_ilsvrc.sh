@@ -31,8 +31,8 @@ python train_sst.py \
     --cls_lr=0.001 \
     --sa_lr=0.01 \
     --sos_lr=0.00005 \
-    --scg_fosc_th=0.1 \
-    --scg_sosc_th=0.5 \
+    --scg_fosc_th=0.2 \
+    --scg_sosc_th=1 \
     --sa_start=3 \
     --sa_use_edge=True \
     --sos_fg_th=0.2 \
