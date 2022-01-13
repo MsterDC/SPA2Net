@@ -287,12 +287,6 @@ def init_meters(args):
     top1_clsacc.reset()
     top5_clsacc.reset()
     meters_params = {'top1_clsacc': top1_clsacc, 'top5_clsacc': top5_clsacc}
-    if 'hinge' in args.mode:
-        top1_clsacc_hg = AverageMeter()
-        top5_clsacc_hg = AverageMeter()
-        top1_clsacc_hg.reset()
-        top5_clsacc_hg.reset()
-        meters_params.update({'top1_clsacc_hg': top1_clsacc_hg, 'top5_clsacc_hg': top5_clsacc_hg})
 
     loc_err = {}
     for th in args.threshold:
@@ -326,27 +320,6 @@ def init_meters(args):
             for err in ['right', 'cls_wrong', 'mins_wrong', 'part_wrong', 'more_wrong', 'other']:
                 loc_err['top1_locerr_{}_sos_{}'.format(err, th)] = AverageMeter()
                 loc_err['top1_locerr_{}_sos_{}'.format(err, th)].reset()
-
-        if 'hinge' in args.mode:
-            loc_err['top1_locerr_hinge_{}'.format(th)] = AverageMeter()
-            loc_err['top1_locerr_hinge_{}'.format(th)].reset()
-            loc_err['top5_locerr_hinge_{}'.format(th)] = AverageMeter()
-            loc_err['top5_locerr_hinge_{}'.format(th)].reset()
-            loc_err['gt_known_locerr_hinge_{}'.format(th)] = AverageMeter()
-            loc_err['gt_known_locerr_hinge_{}'.format(th)].reset()
-            for err in ['right', 'cls_wrong', 'mins_wrong', 'part_wrong', 'more_wrong', 'other']:
-                loc_err['top1_locerr_{}_hinge_{}'.format(err, th)] = AverageMeter()
-                loc_err['top1_locerr_{}_hinge_{}'.format(err, th)].reset()
-
-            loc_err['top1_locerr_scg_hinge_{}'.format(th)] = AverageMeter()
-            loc_err['top1_locerr_scg_hinge_{}'.format(th)].reset()
-            loc_err['top5_locerr_scg_hinge_{}'.format(th)] = AverageMeter()
-            loc_err['top5_locerr_scg_hinge_{}'.format(th)].reset()
-            loc_err['gt_known_locerr_scg_hinge_{}'.format(th)] = AverageMeter()
-            loc_err['gt_known_locerr_scg_hinge_{}'.format(th)].reset()
-            for err in ['right', 'cls_wrong', 'mins_wrong', 'part_wrong', 'more_wrong', 'other']:
-                loc_err['top1_locerr_scg_{}_hinge_{}'.format(err, th)] = AverageMeter()
-                loc_err['top1_locerr_scg_{}_hinge_{}'.format(err, th)].reset()
 
     return meters_params, loc_err
 
