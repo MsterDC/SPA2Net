@@ -32,13 +32,15 @@ class opts(object):
         self.parser.add_argument("--input_size", type=int, default=256)
         self.parser.add_argument("--crop_size", type=int, default=224)
         self.parser.add_argument("--in_norm", type=str, default='True', help='normalize input or not')
-        self.parser.add_argument("--num_workers", type=int, default=16)
-        self.parser.add_argument("--disp_interval", type=int, default=64)
         self.parser.add_argument("--tencrop", type=str, default='False')
         self.parser.add_argument("--onehot", type=str, default='False')
         self.parser.add_argument("--global_counter", type=int, default=0)
         self.parser.add_argument("--current_epoch", type=int, default=0)
         self.parser.add_argument("--seed", default=0, type=int, help='seed for initializing training.')
+        self.parser.add_argument("--num_workers", type=int, default=12)
+        self.parser.add_argument("--disp_interval", type=int, default=64)
+        self.parser.add_argument("--drop_last", type=bool, default=False)
+        self.parser.add_argument("--pin_memory", type=bool, default=False)
 
         self.parser.add_argument("--snapshot_dir", type=str)
         self.parser.add_argument("--log_dir", type=str)
@@ -57,7 +59,7 @@ class opts(object):
         self.parser.add_argument("--pretrained_model", type=str, default='')
 
         self.parser.add_argument("--warmup", type=str, default='False', help='switch use warmup training strategy.')
-        self.parser.add_argument("--warmup_fun", type=str, default='', help='using on ILSVRC, op: gra / cos')
+        self.parser.add_argument("--warmup_fun", type=str, default='gra', help='using on ILSVRC, op: gra / cos')
 
         self.parser.add_argument("--freeze", type=str, default='False', help='True or False')
         self.parser.add_argument("--freeze_module", type=str, help='freezed modules name.')
@@ -81,8 +83,8 @@ class opts(object):
         self.parser.add_argument("--sa_head", type=float, default=8, help='number of SA heads')
         self.parser.add_argument("--sa_neu_num", type=float, help='size of SA linear input')
 
+        self.parser.add_argument("--sos_start", type=float, default=0, help='the start epoch to introduce sos.')
         self.parser.add_argument("--sos_loss_weight", type=float, help='loss weight for the sos loss.')
-        self.parser.add_argument("--sos_start", type=float, help='the start epoch to introduce sos.')
         self.parser.add_argument("--sos_gt_seg", type=str, default='True', help='True / False')
         self.parser.add_argument("--sos_seg_method", type=str, default='TC', help='BC / TC')
         self.parser.add_argument("--sos_loss_method", type=str, default='BCE', help='BCE / MSE')
@@ -346,43 +348,51 @@ def warmup_init(args, optimizer, op_params_list):
         return gra_scheduler
 
 
-def lr_decay(args, decay_params, decay_count, decay_flag, decay_once,
-             optimizer, current_epoch, gra_scheduler):
+def lr_decay(args, decay_params, decay_count, decay_flag, optimizer, current_epoch, gra_scheduler):
     return_list = []
     if args.warmup == 'True':  # warmup LR
         if args.dataset == 'cub' and args.warmup_fun == 'gra':
             raise Exception("On cub-200, warmup gra lr is unused.")
+        pass
         if args.dataset == 'ilsvrc':
             decay_str = decay_params[decay_count]
             if my_optim.reduce_lr(args, optimizer, current_epoch, decay_params=decay_str):
                 decay_count += 1
                 if args.warmup_fun == 'gra':
                     gra_scheduler.update_optimizer(optimizer, current_epoch)
+                pass
+            pass
             if args.warmup_fun == 'gra':
                 gra_scheduler.step(current_epoch)
+            pass
+        pass
     else:  # w/o warmup
         if args.dataset == 'cub':
             if args.decay_points == 'none':
-                if decay_flag is True and decay_once is False:
+                if decay_flag is True:
                     decay_str = decay_params[decay_count]
                     if my_optim.reduce_lr(args, optimizer, current_epoch, decay_params=decay_str):
                         total_epoch = current_epoch + 20
-                        decay_once = True
                         decay_count += 1
                         return_list.append(total_epoch)
+                    pass
+                pass
             else:
                 decay_str = decay_params[decay_count]
                 if my_optim.reduce_lr(args, optimizer, current_epoch, decay_params=decay_str):
-                    decay_once = True
                     decay_count += 1
+                pass
+            pass
+        pass
         if args.dataset == 'ilsvrc':
             decay_str = decay_params[decay_count]
             if my_optim.reduce_lr(args, optimizer, current_epoch, decay_params=decay_str):
-                decay_once = True
                 decay_count += 1
+            pass
+        pass
+    pass
 
     return_list.append(optimizer)
     return_list.append(decay_count)
-    return_list.append(decay_once)
     return_list.append(gra_scheduler)
     return return_list
