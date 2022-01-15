@@ -95,7 +95,6 @@ def train(args):
     print('Max iter:', max_iter)
 
     decay_flag = False
-    decay_once = False
     decay_count = 0
 
     while current_epoch < total_epoch:
@@ -111,14 +110,13 @@ def train(args):
         if args.spa_loss == 'True':
             losses_spa.reset()
 
-        #  learning rate decay.
-        if (str(current_epoch) in args.decay_points) or args.decay_points == 'none':
-            return_list = lr_decay(args, decay_params, decay_count, decay_flag, decay_once,
-                                   optimizer, current_epoch, gra_scheduler)
-            if len(return_list) > 4:
-                total_epoch, optimizer, decay_count, decay_once, gra_scheduler = return_list
-            else:
-                optimizer, decay_count, decay_once, gra_scheduler = return_list
+        #  learning rate decay and step lr_scheduler
+        return_list = lr_decay(args, decay_params, decay_count, decay_flag,
+                               optimizer, current_epoch, gra_scheduler)
+        if len(return_list) > 3:
+            total_epoch, optimizer, decay_count, gra_scheduler = return_list
+        else:
+            optimizer, decay_count, gra_scheduler = return_list
 
         with open(os.path.join(args.snapshot_dir, 'train_record.csv'), 'a') as fw:
             for p_name, g in zip(params_id_list, optimizer.param_groups):
@@ -127,9 +125,9 @@ def train(args):
                 fw.write(out_str)
             fw.close()
 
-        save_flag = True  # 'save_cam' during training.
-        watch_trans_img, watch_cam, watch_cls_logits, watch_img_path, \
-        watch_label, watch_sos, watch_gt = [None] * 7
+        # 'save_cam' during training.
+        save_flag = True
+        watch_trans_img, watch_cam, watch_cls_logits, watch_img_path, watch_label, watch_sos, watch_gt = [None] * 7
 
         for idx, dat in enumerate(train_loader):
             global_counter += 1
@@ -139,10 +137,7 @@ def train(args):
 
             b_s = input_img.size()[0]
 
-            sc_maps_fo = None
-            sc_maps_so = None
-            pred_sos = None
-            gt_scm = None
+            sc_maps_fo,sc_maps_so,pred_sos,gt_scm = [None] * 4
 
             # forward pass
             if args.mode == 'spa':

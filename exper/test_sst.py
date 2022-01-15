@@ -139,6 +139,7 @@ def val(args):
 
         # Evaluate localization results
         loc_err, end_times = eval_loc_all(args, params_loc)
+
         if 'cam' in end_times:
             batch_time_cam.update(1 / forward_cost + args.batch_size / end_times.get('cam'))
         if 'scg' in end_times:
