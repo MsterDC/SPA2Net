@@ -14,7 +14,9 @@ python train_sst.py \
     --watch_cam \
     --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_finetune_#2 \
     --log_dir=../log/ilsvrc/vgg16_sos+sa_v3_finetune_#2 \
-    --num_workers=32 \
+    --drop_last=False \
+    --pin_memory=True \
+    --num_workers=12 \
     --resume=True \
     --restore_from=ilsvrc_epoch_5.pth.tar \
     --load_finetune=False \

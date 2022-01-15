@@ -12,7 +12,7 @@ python test_sst.py \
     --sa_head=8 \
     --scg_com \
     --snapshot_dir=../snapshots/ilsvrc/vgg16_sos+sa_v3_finetune_#2 \
-    --debug_dir=../debug/ilsvrc/vgg16_sos+sa_v3_finetune_#2_t1 \
+    --debug_dir=../debug/ilsvrc/vgg16_sos+sa_v3_finetune_#2_t2 \
     --threshold=0.1,0.8 \
     --batch_size=10 \
     --gpus=1 \

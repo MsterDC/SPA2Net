@@ -14,7 +14,9 @@ python train_sst.py \
     --watch_cam \
     --snapshot_dir=../snapshots/vgg16_sos+sa_v3_rept_#1 \
     --log_dir=../log/vgg16_sos+sa_v3_rept_#1 \
-    --num_workers=64 \
+    --drop_last=False \
+    --pin_memory=True \
+    --num_workers=12 \
     --resume=False \
     --restore_from=cub_epoch_100.pth.tar \
     --load_finetune=False \

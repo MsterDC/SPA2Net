@@ -12,16 +12,18 @@ python train_sst.py \
     --sos_start=0 \
     --sa_head=8 \
     --watch_cam \
-    --snapshot_dir=../snapshots/ilsvrc/inceptionv3_sos+sa_v3_#25 \
-    --log_dir=../log/ilsvrc/inceptionv3_sos+sa_v3_#25 \
-    --num_workers=48 \
-    --resume=False \
-    --restore_from=ilsvrc_epoch_8.pth.tar \
-    --load_finetune=True \
+    --snapshot_dir=../snapshots/ilsvrc/inceptionv3_sos+sa_v3_#26 \
+    --log_dir=../log/ilsvrc/inceptionv3_sos+sa_v3_#26 \
+    --drop_last=False \
+    --pin_memory=True \
+    --num_workers=12 \
+    --resume=True \
+    --restore_from=ilsvrc_epoch_7.pth.tar \
+    --load_finetune=False \
     --finetuned_model_dir=../snapshots/ilsvrc/inceptionv3_cls \
     --finetuned_model=ilsvrc_epoch_20.pth.tar \
     --batch_size=64 \
-    --gpus=0,1,2,3 \
+    --gpus=0,1,2,3,4,5,6,7 \
     --epoch=20 \
     --warmup=True \
     --warmup_fun=gra \

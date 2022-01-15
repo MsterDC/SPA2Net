@@ -12,15 +12,18 @@ python train_sst.py \
     --ram_start=20 \
     --scg_com \
     --watch_cam \
-    --snapshot_dir=../snapshots/inceptionv3_sos+sa_v3_#19 \
-    --log_dir=../log/inceptionv3_sos+sa_v3_#19 \
+    --snapshot_dir=../snapshots/inceptionv3_sos+sa_v3_#3 \
+    --log_dir=../log/inceptionv3_sos+sa_v3_#3 \
+    --drop_last=False \
+    --pin_memory=True \
+    --num_workers=12 \
     --load_finetune=False \
     --finetuned_model_dir=../snapshots/inceptionv3_cls \
     --finetuned_model=cub_epoch_100.pth.tar \
     --epoch=100 \
     --decay_points=none \
     --decay_module=all \
-    --batch_size=128 \
+    --batch_size=64 \
     --gpus=0,1,2,3,4,5,6,7 \
     --lr=0.001 \
     --cls_lr=0.01 \
@@ -39,4 +42,3 @@ python train_sst.py \
     --ram_th_bg=0.1 \
     --ram_bg_fg_gap=0 \
     --mode=sos+sa_v3 \
-
