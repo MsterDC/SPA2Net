@@ -21,8 +21,8 @@ python train_sst.py \
     --finetuned_model_dir=../snapshots/inceptionv3_cls \
     --finetuned_model=cub_epoch_100.pth.tar \
     --epoch=100 \
-    --decay_points=none \
-    --decay_module=all \
+    --decay_node=dynamic \
+    --decay_module=bakb,cls-h,loc-h,sAtt \
     --batch_size=64 \
     --gpus=0,1,2,3,4,5,6,7 \
     --lr=0.001 \

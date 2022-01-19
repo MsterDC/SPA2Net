@@ -11,15 +11,15 @@ python test_sst.py \
     --num_classes=1000 \
     --sa_head=8 \
     --scg_com \
-    --snapshot_dir=../snapshots/ilsvrc/inceptionv3_sos+sa_v3_#18 \
-    --debug_dir=../debug/ilsvrc/inceptionv3_sos+sa_v3_#18_t1 \
+    --snapshot_dir=../snapshots/ilsvrc/inceptionv3_sos+sa_v3_#24 \
+    --debug_dir=../debug/ilsvrc/inceptionv3_sos+sa_v3_#24_t1 \
     --threshold=0.05,0.8 \
-    --batch_size=4 \
+    --batch_size=5 \
     --gpus=0 \
     --restore_from=ilsvrc_epoch_20.pth.tar \
     --scg_version=v2 \
-    --scg_fosc_th=0.4 \
-    --scg_sosc_th=2 \
+    --scg_fosc_th=0.1 \
+    --scg_sosc_th=0.5 \
     --sa_use_edge=True \
     --mask_save=False \
     --mask_path=../results \

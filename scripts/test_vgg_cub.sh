@@ -10,15 +10,15 @@ python test_sst.py \
     --test_box=../data/CUB_200_2011/list/test_boxes.txt \
     --num_classes=200 \
     --scg_com \
-    --snapshot_dir=../snapshots/vgg16_sos+sa_v3_repo_#1 \
-    --debug_dir=../debug/vgg16_sos+sa_v3_repo_#1_t1 \
-    --batch_size=10 \
-    --restore_from=cub_epoch_100.pth.tar \
+    --snapshot_dir=../snapshots/vgg16_sos+sa_v3_rept_#1 \
+    --debug_dir=../debug/vgg16_sos+sa_v3_rept_#1_t1 \
+    --batch_size=15 \
+    --restore_from=cub_epoch_108.pth.tar \
     --threshold=0.05,0.5 \
     --scg_version=v2 \
     --scg_fosc_th=0.2 \
     --scg_sosc_th=1 \
-    --gpus=1 \
+    --gpus=0 \
     --sa_head=8 \
     --sa_use_edge=True \
     --debug \

@@ -25,8 +25,8 @@ python train_sst.py \
     --batch_size=64 \
     --gpus=0,1 \
     --epoch=20 \
-    --decay_point=6,17 \
-    --decay_module=bb,cls,sa\;all \
+    --decay_node=6@17 \
+    --decay_module=bakb,cls-h,loc-h,sAtt@bakb,cls-h,loc-h,sAtt \
     --lr=0.001 \
     --cls_lr=0.001 \
     --sos_lr=0.0005 \
