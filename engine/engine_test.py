@@ -32,7 +32,6 @@ class opts(object):
         self.parser.add_argument("--num_classes", type=int)
         self.parser.add_argument("--arch", type=str)
         self.parser.add_argument("--lr", type=float)
-        self.parser.add_argument("--decay_points", type=str)
         self.parser.add_argument("--epoch", type=int, default=200)
         self.parser.add_argument("--tencrop", type=str, default='True')
         self.parser.add_argument("--onehot", type=str, default='False')

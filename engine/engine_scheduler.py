@@ -4,13 +4,14 @@ from torch.optim.lr_scheduler import _LRScheduler
 class GradualWarmupScheduler(_LRScheduler):
     """ Gradually warm-up(increasing) learning rate in optimizer.
     Proposed in 'Accurate, Large Minibatch SGD: Training ImageNet in 1 Hour'.
+    @ Author: Kevin in JLU
     Args:
         optimizer (Optimizer): Wrapped optimizer.
         multiplier: target learning rate = base lr * multiplier if multiplier > 1.0. if multiplier = 1.0, lr starts from 0 and ends up with the base_lr.
         warmup_period: list of target learning rate is reached in warmup_period epochs, gradually, eg:[5,5]
         warmup_node: list of start warmup epoch node, eg:[0,20]
         warmup_params: list of params which use warmup, eg:[['cls','sos'],['sa']]
-        optim_params_list: list of all params, eg:['cls_weight', 'cls_bias', 'sos_weight', 'sos_bias', 'sa_weight', 'sa_bias', 'other_weight', 'other_bias']
+        optim_params_list: list of all params, eg:['cls_weight', 'cls_bias', 'sos_weight', 'sos_bias', 'sa_weight', 'sa_bias', 'bb_weight', 'bb_bias']
     """
 
     def __init__(self, optimizer, warmup_period, warmup_node, warmup_params, optim_params_list, multiplier=1.0):
@@ -21,7 +22,7 @@ class GradualWarmupScheduler(_LRScheduler):
         self.warmup_node = warmup_node  # [0,20]
         self.stage = [(node, node+period) for node, period in zip(warmup_node, warmup_period)]  #[(0,5),(20,25)]
         self.warmup_params = warmup_params  # [['cls_weight', 'cls_bias', 'sos_weight', 'sos_bias'], ['sa_weight', 'sa_bias']]
-        self.optim_params = optim_params_list  # ['cls_weight', 'cls_bias', 'sos_weight', 'sos_bias', 'sa_weight', 'sa_bias', 'other_weight', 'other_bias']
+        self.optim_params = optim_params_list  # ['cls_weight', 'cls_bias', 'sos_weight', 'sos_bias', 'sa_weight', 'sa_bias', 'bb_weight', 'bb_bias']
         super(GradualWarmupScheduler, self).__init__(optimizer)
 
     def get_lr(self):
@@ -37,11 +38,12 @@ class GradualWarmupScheduler(_LRScheduler):
                     for w_name in self.warmup_params[idx]:
                         if p_name == w_name:
                             if self.multiplier == 1.0:
-                                updated_lr = base_lr * ((self.last_epoch - start_epoch) / self.warmup_period[idx])
+                                updated_lr = base_lr * ((self.last_epoch + 1 - start_epoch) / self.warmup_period[idx] + 1)
                             else:
-                                updated_lr = base_lr * ((self.multiplier - 1.) * (self.last_epoch - start_epoch) / self.warmup_period[idx] + 1.)
+                                updated_lr = base_lr * ((self.multiplier - 1.) * (self.last_epoch + 1 - start_epoch) / self.warmup_period[idx] + 1. + 1)
                             new_lr.append(updated_lr)
                             exist_flag = True
+                    # parameters' learning rates are all set to 0 except 'warmup_params'.
                     if exist_flag is False:
                         new_lr.append(float(0))
                 return new_lr

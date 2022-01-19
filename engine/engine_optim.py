@@ -55,60 +55,6 @@ def get_adam(args, model):
     return opt
 
 
-def reduce_lr(args, optimizer, epoch, factor=0.1, decay_params=None):
-    if decay_params is not None:
-        decay_params = decay_params.strip().split(',')
-
-    if args.decay_points == 'none':
-        points = [str(epoch)]
-    else:
-        points = args.decay_points.strip().split(',')
-    try:
-        change_points = map(lambda x: int(x.strip()), points)
-    except ValueError:
-        change_points = None
-    if change_points is not None and epoch in change_points:
-        if decay_params is not None:
-            for idx in decay_params:
-                if idx == 'all':
-                    for g in optimizer.param_groups:
-                        g['lr'] = g['lr'] * factor
-                    return True
-                else:
-                    print("decayed modules' idx:", idx)
-                    index = int(idx)
-                    optimizer.param_groups[index]['lr'] = optimizer.param_groups[index]['lr'] * factor
-        else:
-            for g in optimizer.param_groups:
-                g['lr'] = g['lr'] * factor
-        return True
-    else:
-        return False
-
-
-def adjust_lr(args, optimizer, epoch):
-    if 'cifar' in args.dataset:
-        change_points = [80, 120, 160]
-    elif 'indoor' in args.dataset:
-        change_points = [60, 80, 100]
-    elif 'dog' in args.dataset:
-        change_points = [60, 80, 100]
-    elif 'voc' in args.dataset:
-        change_points = [30, 40]
-    else:
-        change_points = None
-
-    if change_points is not None:
-        change_points = np.array(change_points)
-        pos = np.sum(epoch > change_points)
-        lr = args.lr * (0.1 ** pos)
-    else:
-        lr = args.lr
-
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
-
-
 def set_freeze_by_names(model, layer_names, freeze=True):
     if not isinstance(layer_names, Iterable):
         layer_names = [layer_names]
@@ -118,6 +64,7 @@ def set_freeze_by_names(model, layer_names, freeze=True):
         for param in child.parameters():
             param.requires_grad = not freeze
     pass
+
 
 def freeze_by_names(model, layer_names):
     set_freeze_by_names(model, layer_names, True)
