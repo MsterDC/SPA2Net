@@ -18,12 +18,6 @@ model_urls = {
 
 
 def model(pretrained=False, **kwargs):
-    r"""Inception v3 model architecture from
-    `"Rethinking the Inception Architecture for Computer Vision" <http://arxiv.org/abs/1512.00567>`_.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-    """
     if pretrained:
         model = Inception3(**kwargs)
         model_dict = model.state_dict()
@@ -270,7 +264,6 @@ class Inception3(nn.Module):
 
     def get_cls_loss(self, logits, label):
         return self.ce_loss(logits, label.long())
-
 
     def get_ra_loss(self, logits, label, th_bg=0.3, bg_fg_gap=0.0):
         n, _, _, _ = logits.size()
