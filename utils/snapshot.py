@@ -1,11 +1,44 @@
 import numpy as np
 import os
-
 import cv2
 import torch
 from torchvision import transforms
+import torch.nn.functional as F
 
 from utils.vistools import norm_atten_map
+
+
+def save_snapshot(args, img_path, input_img, logits, cls_logits, label, gt_scm, pred_sos, current_epoch):
+    for t_x, im in enumerate(img_path):
+        if args.wanted_im in im:
+            save_flag = False
+            watch_trans_img = input_img[t_x]
+            watch_cam = F.relu(logits)[t_x]
+            watch_cls_logits = cls_logits[t_x]
+            watch_img_path = im
+            watch_label = label.long()[t_x]
+            if 'sos' in args.mode and current_epoch >= args.sos_start:
+                watch_gt = [gt_scm[t_x]]
+                # watch_scm = [(sc_maps_fo[-2][t_x], sc_maps_fo[-1][t_x]),
+                #              (sc_maps_so[-2][t_x], sc_maps_so[-1][t_x])]
+                watch_sos = pred_sos[t_x]
+                watch_sos = [torch.sigmoid(watch_sos)] if args.sos_loss_method == 'BCE' else [watch_sos]
+            try:
+                save_cam(args, watch_trans_img, watch_cam, watch_cls_logits, watch_img_path, watch_label,
+                         current_epoch)
+                if 'sos' in args.mode and current_epoch >= args.sos_start:
+                    save_sos(args, watch_trans_img, watch_sos, watch_img_path, current_epoch, suffix='sos')
+                    save_sos(args, watch_trans_img, watch_gt, watch_img_path, current_epoch,
+                             suffix='gt_sos')
+                    # save_scm(args, watch_trans_img, watch_scm, watch_img_path, current_epoch, suffix='sc_4+5')
+            except:
+                print("Saving CAM faild:")
+                print("=> Current epoch is", current_epoch)
+                print("=> Save flag is", save_flag)
+                print("=> Watch img path is", watch_img_path)
+            pass
+        pass
+    pass
 
 
 def save_cam(args, tras_img, save_cam, cls_logits, img_path, gt_label, epoch, threshold=0.3, suffix='cam'):
