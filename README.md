@@ -1,4 +1,4 @@
-# SPA-Net
+# SPA2Net
 PyTorch implementation for SPA2Net.
 
 ## :gear: Quick Start: Train & Test
