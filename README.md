@@ -19,7 +19,7 @@ unzip inceptionv3_cls.zip
 
 ### Switch to the `scripts` directory and execute the following shell code:
 
-:fire: Train
+#### :fire: Train
 ```shell
 bash ./train_vgg_cub.sh  # For VGG-16 trained on CUB-200-2011
 bash ./train_inceptionv3_cub.sh  # For Inception V3 trained on CUB-200-2011
@@ -29,7 +29,10 @@ bash ./train_vgg_ilsvrc.sh  # For VGG-16 trained on ILSVRC
 bash ./train_inceptionv3_ilsvrc.sh  # For Inception V3 trained on ILSVRC
 ```
 
-:fire: Test 
+#### :fire: Test 
+Download the model from [GoogleDrive](https://drive.google.com/drive/folders/1nnO1KNxKL3uq36TopobWI3pyzK4xWTXz?usp=sharing) and put it into `snapshot/vgg16_cub_spa2net/`
+
+Execute the following command:
 ```shell
 bash ./test_vgg_cub.sh  # For VGG-16 test on CUB-200-2011
 bash ./test_inceptionv3_cub.sh  # For Inception V3 test on CUB-200-2011
