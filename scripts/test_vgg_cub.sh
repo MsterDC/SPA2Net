@@ -13,7 +13,7 @@ python test_sst.py \
     --snapshot_dir=../snapshots/vgg16_cub_spa2net \
     --debug_dir=../debug/vgg16_cub_spa2net_t1 \
     --batch_size=15 \
-    --restore_from=cub_epoch_119.pth.tar \
+    --restore_from=cub_epoch_100.pth.tar \
     --threshold=0.05,0.5 \
     --scg_version=v2 \
     --scg_fosc_th=0.2 \
