@@ -1,22 +1,12 @@
 # SPA2Net
 PyTorch implementation for SPA2Net.
 
-## :gear: Quick Start: Train & Test
+## 🦊 Dataset
+### Switch to the [data](https://github.com/MsterDC/SPA2Net/tree/1ab3d3366774485804b13932b1e64b3ae37eda67/data/CUB_200_2011) for details.
 
-### Switch to the `scripts` directory and execute the following shell code:
+## :gear: Train & Test
+### Switch to the [scripts](https://github.com/MsterDC/SPA2Net/tree/7cf39d4e96ca7f81c585a7f4f4f60e8179f329d6/scripts) for details.
 
-#### :fire: Train
-```shell
-bash ./train_vgg_cub.sh  # For VGG-16 trained on CUB-200-2011
-```
-
-#### :fire: Test 
-Download the model from [GoogleDrive](https://drive.google.com/drive/folders/1nnO1KNxKL3uq36TopobWI3pyzK4xWTXz?usp=sharing) and put it into `snapshot/vgg16_cub_spa2net/`
-
-Execute the following command:
-```shell
-bash ./test_vgg_cub.sh
-```
-
-### :mag: For a more detailed explanation of each parameter, please refer to the [`HELP.md`](HELP.md).
+## :mag: More
+### Please refer to the [`HELP.md`](HELP.md).
 
