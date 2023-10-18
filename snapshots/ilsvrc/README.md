@@ -1,4 +1,4 @@
-## Pre-trained model for training
+## Pre-trained model for training on ImageNet-1K
 
 ### 🔥 For Inception-v3, download the pre-trained model and extract.
 * [GoogleDrive](https://drive.google.com/file/d/1JsiRQHV39Cr6DTP1MwjAZ-hG4dztdIQS/view?usp=sharing)
